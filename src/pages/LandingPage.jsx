@@ -9,15 +9,15 @@ const REVIEWS = [
 
 export default function LandingPage({ providers, bookings, onBook, setPage }) {
   const [search, setSearch] = useState('');
-
-  const filtered = search
-    ? providers.filter(p =>
-        (p.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())) ||
-        (p.profiles?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (p.headline || '').toLowerCase().includes(search.toLowerCase())
-      )
-    : providers;
-
+const onlineProviders = providers.filter(p => p.available !== false);
+  const filtered = (search
+  ? onlineProviders.filter(p =>
+      (p.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())) ||
+      (p.profiles?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.headline || '').toLowerCase().includes(search.toLowerCase())
+    )
+  : onlineProviders);
+    
   const totalCompleted = (bookings || []).filter(b => b.status === 'Completed').length;
 
   return (
@@ -28,7 +28,7 @@ export default function LandingPage({ providers, bookings, onBook, setPage }) {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 100, padding: '6px 16px', marginBottom: 20 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
             <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: 500 }}>
-              {providers.length} provider{providers.length !== 1 ? 's' : ''} available now
+              {onlineProviders.length} provider{onlineProviders.length !== 1 ? 's' : ''} available now
             </span>
           </div>
           <h1 style={{ fontSize: 'clamp(30px,5vw,54px)', fontWeight: 800, color: 'white', lineHeight: 1.1, maxWidth: 700, margin: '0 auto 16px' }}>
