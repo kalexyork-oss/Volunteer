@@ -94,6 +94,7 @@ export default function App() {
   const [providers,       setProviders]       = useState([]);
   const [bookings,        setBookings]        = useState([]);
   const [showAuth,        setShowAuth]        = useState(false);
+  const [authMode,        setAuthMode]        = useState('signin');
   const [showBook,        setShowBook]        = useState(false);
   const [showPost,        setShowPost]        = useState(false);
   const [toast,           setToast]           = useState(null);
@@ -125,10 +126,22 @@ export default function App() {
       else setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthMode('reset');
+        setShowAuth(true);
+        return;
+      }
       if (session?.user) loadUser(session.user);
       else { setUser(null); setProfile(null); setProviderProfile(null); }
     });
+
+    // Also check URL params for reset redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reset') === 'true') {
+      setAuthMode('reset');
+      setShowAuth(true);
+    }
 
     loadProviders();
     return () => subscription.unsubscribe();
@@ -209,7 +222,7 @@ export default function App() {
         />
       )}
 
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => showToast('Welcome!')} />}
+      {showAuth && <AuthModal onClose={() => { setShowAuth(false); setAuthMode('signin'); }} onSuccess={() => showToast('Welcome!')} initialMode={authMode} />}
       {showBook && <BookingModal onClose={() => setShowBook(false)} onSuccess={handleBookSuccess} providers={providers} userId={user?.id} />}
       {showPost && <PostServiceModal onClose={() => setShowPost(false)} onSuccess={handlePostSuccess} userId={user?.id} />}
       {toast    && <Toast msg={toast} onClose={() => setToast(null)} />}
