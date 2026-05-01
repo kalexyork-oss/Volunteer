@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TAGS } from '../data';
 
 const REVIEWS = [
@@ -20,18 +20,58 @@ function ProviderAvatar({ provider, size = 48 }) {
 }
 
 export default function LandingPage({ providers, bookings, onBook, setPage, onViewProfile }) {
-  const [search, setSearch] = useState('');
+  const [search,      setSearch]      = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterZip,   setFilterZip]   = useState('');
+  const [filterMaxPrice, setFilterMaxPrice] = useState('');
+  const [filterMinRating, setFilterMinRating] = useState(0);
+  const [sortBy,      setSortBy]      = useState('rating'); // 'rating' | 'price_low' | 'price_high' | 'reviews'
 
   const onlineProviders = providers.filter(p => p.available !== false);
-  const filtered = search
-    ? onlineProviders.filter(p =>
+
+  const filtered = useMemo(() => {
+    let list = onlineProviders;
+
+    // Text search
+    if (search) {
+      list = list.filter(p =>
         (p.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())) ||
         (p.profiles?.name || '').toLowerCase().includes(search.toLowerCase()) ||
         (p.headline || '').toLowerCase().includes(search.toLowerCase())
-      )
-    : onlineProviders;
+      );
+    }
+
+    // Zip filter
+    if (filterZip) {
+      list = list.filter(p => (p.zip || p.profiles?.zip || '').startsWith(filterZip));
+    }
+
+    // Max price filter
+    if (filterMaxPrice) {
+      list = list.filter(p => !p.hourly_rate || p.hourly_rate <= parseFloat(filterMaxPrice));
+    }
+
+    // Min rating filter
+    if (filterMinRating > 0) {
+      list = list.filter(p => !p.rating || p.rating >= filterMinRating);
+    }
+
+    // Sort
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'rating')     return (b.rating || 0) - (a.rating || 0);
+      if (sortBy === 'price_low')  return (a.hourly_rate || 999) - (b.hourly_rate || 999);
+      if (sortBy === 'price_high') return (b.hourly_rate || 0) - (a.hourly_rate || 0);
+      if (sortBy === 'reviews')    return (b.review_count || 0) - (a.review_count || 0);
+      return 0;
+    });
+
+    return list;
+  }, [onlineProviders, search, filterZip, filterMaxPrice, filterMinRating, sortBy]);
 
   const totalCompleted = (bookings || []).filter(b => b.status === 'Completed').length;
+  const activeFilters  = [filterZip, filterMaxPrice, filterMinRating > 0].filter(Boolean).length;
+
+  const clearFilters = () => { setFilterZip(''); setFilterMaxPrice(''); setFilterMinRating(0); setSortBy('rating'); };
 
   return (
     <div>
@@ -65,28 +105,110 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
         </div>
       </div>
 
-      {/* SEARCH */}
+      {/* SEARCH + FILTERS */}
       <div className="section">
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <h2 style={{ fontSize: 28, color: 'var(--gray-800)', marginBottom: 8 }}>Find a Provider</h2>
-          <p style={{ color: 'var(--gray-500)' }}>Search by skill, service, or name</p>
+          <p style={{ color: 'var(--gray-500)' }}>Search and filter to find the perfect match</p>
         </div>
-        <div className="search-bar" style={{ maxWidth: 600, margin: '0 auto 24px' }}>
-          <span className="search-icon">🔍</span>
-          <input type="text" placeholder="Search lawn care, tech help, tutoring..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 44 }} />
+
+        {/* Search bar */}
+        <div style={{ maxWidth: 700, margin: '0 auto 16px', display: 'flex', gap: 10 }}>
+          <div className="search-bar" style={{ flex: 1 }}>
+            <span className="search-icon">🔍</span>
+            <input type="text" placeholder="Search lawn care, tech help, tutoring..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 44 }} />
+          </div>
+          <button
+            onClick={() => setShowFilters(f => !f)}
+            style={{
+              padding: '0 18px', borderRadius: 12, border: `2px solid ${showFilters ? 'var(--navy)' : 'var(--gray-200)'}`,
+              background: showFilters ? 'var(--navy)' : 'white', color: showFilters ? 'white' : 'var(--gray-600)',
+              cursor: 'pointer', fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+            }}
+          >
+            🎛️ Filters {activeFilters > 0 && <span style={{ background: 'var(--green)', color: 'white', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>{activeFilters}</span>}
+          </button>
         </div>
+
+        {/* Filter panel */}
+        {showFilters && (
+          <div className="card" style={{ maxWidth: 700, margin: '0 auto 24px', padding: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+              {/* Zip filter */}
+              <div>
+                <label>Zip Code</label>
+                <input type="text" placeholder="e.g. 29707" value={filterZip} onChange={e => setFilterZip(e.target.value)} maxLength={5} />
+              </div>
+
+              {/* Max price */}
+              <div>
+                <label>Max Price ($/hr)</label>
+                <input type="number" placeholder="e.g. 75" value={filterMaxPrice} onChange={e => setFilterMaxPrice(e.target.value)} min="0" />
+              </div>
+
+              {/* Min rating */}
+              <div>
+                <label>Minimum Rating</label>
+                <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+                  {[0,3,4,4.5].map(r => (
+                    <button key={r} onClick={() => setFilterMinRating(r)} style={{
+                      flex: 1, padding: '7px 4px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+                      background: filterMinRating === r ? 'var(--navy)' : 'var(--gray-100)',
+                      color: filterMinRating === r ? 'white' : 'var(--gray-600)',
+                    }}>
+                      {r === 0 ? 'Any' : `${r}★+`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <label>Sort By</label>
+                <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                  <option value="rating">Highest Rated</option>
+                  <option value="reviews">Most Reviews</option>
+                  <option value="price_low">Price: Low to High</option>
+                  <option value="price_high">Price: High to Low</option>
+                </select>
+              </div>
+            </div>
+
+            {activeFilters > 0 && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--gray-200)', display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+                  Clear all filters ×
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tags */}
         {!search && (
-          <div className="tag-cloud" style={{ justifyContent: 'center', marginBottom: 32 }}>
+          <div className="tag-cloud" style={{ justifyContent: 'center', marginBottom: 24 }}>
             {TAGS.slice(0, 14).map(t => <span key={t} className="tag" onClick={() => setSearch(t)}>{t}</span>)}
           </div>
         )}
 
+        {/* Results count */}
+        {(search || activeFilters > 0) && (
+          <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 14, color: 'var(--gray-500)' }}>
+            {filtered.length} provider{filtered.length !== 1 ? 's' : ''} found
+            {search && <span> for "<strong>{search}</strong>"</span>}
+          </div>
+        )}
+
+        {/* Provider cards */}
         {filtered.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 48, marginBottom: 8 }}>🔍</div>
-            <h3 style={{ marginBottom: 4 }}>{search ? `No providers found for "${search}"` : 'No providers yet'}</h3>
-            <p style={{ marginBottom: 16 }}>Post an open request and local helpers will respond.</p>
-            <button className="btn-primary" onClick={() => onBook()}>Post a Request</button>
+            <h3 style={{ marginBottom: 4 }}>No providers found</h3>
+            <p style={{ marginBottom: 16 }}>Try adjusting your filters or post an open request.</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              {activeFilters > 0 && <button className="btn-outline" onClick={clearFilters}>Clear Filters</button>}
+              <button className="btn-primary" onClick={() => onBook()}>Post a Request</button>
+            </div>
           </div>
         ) : (
           <div className="grid-3">
@@ -96,7 +218,7 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
                     <ProviderAvatar provider={p} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 15 }}>{p.profiles?.name}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--gray-800)', fontSize: 15 }}>{p.profiles?.name}</div>
                       <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{p.headline}</div>
                       {p.rating > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
@@ -107,27 +229,19 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
                     </div>
                     <span className="badge badge-green" style={{ fontSize: 11, flexShrink: 0 }}>● Open</span>
                   </div>
-
                   {p.bio && <p style={{ fontSize: 13, color: 'var(--gray-600)', lineHeight: 1.6, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.bio}</p>}
-
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 14 }}>
                     {(p.skills || []).slice(0,4).map(s => <span key={s} className="badge badge-gray" style={{ fontSize: 11 }}>{s}</span>)}
                     {(p.skills || []).length > 4 && <span className="badge badge-gray" style={{ fontSize: 11 }}>+{p.skills.length - 4}</span>}
                   </div>
                 </div>
-
                 <div style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>📍 {p.profiles?.zip || p.zip}</span>
-                    {p.hourly_rate && <span style={{ fontSize: 13, color: 'var(--gray-500)', marginLeft: 8 }}>· ${p.hourly_rate}/hr</span>}
+                    {p.hourly_rate && <span style={{ fontSize: 13, color: 'var(--gray-500)', marginLeft: 8 }}>· <strong style={{ color: 'var(--navy)' }}>${p.hourly_rate}/hr</strong></span>}
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => onViewProfile && onViewProfile(p.id)}
-                      style={{ background: 'none', border: '1.5px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--gray-600)', fontWeight: 500 }}
-                    >
-                      View
-                    </button>
+                    <button onClick={() => onViewProfile && onViewProfile(p.id)} style={{ background: 'none', border: '1.5px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--gray-600)', fontWeight: 500 }}>View</button>
                     <button className="btn-primary btn-sm" onClick={() => onBook(p.id)}>Book</button>
                   </div>
                 </div>
@@ -146,9 +260,7 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
           <div className="grid-3">
             {REVIEWS.map((r, i) => (
               <div key={i} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 16, padding: 24, border: '1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ display: 'flex', marginBottom: 8 }}>
-                  {[1,2,3,4,5].map(s => <span key={s} style={{ color: '#f59e0b', fontSize: 14 }}>★</span>)}
-                </div>
+                <div style={{ display: 'flex', marginBottom: 8 }}>{[1,2,3,4,5].map(s => <span key={s} style={{ color: '#f59e0b', fontSize: 14 }}>★</span>)}</div>
                 <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 14, lineHeight: 1.7, margin: '12px 0' }}>{r.text}</p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>— {r.name} · {r.service}</span>
