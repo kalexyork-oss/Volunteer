@@ -3,18 +3,19 @@ import { supabase } from './lib/supabase';
 import { getProfile, getProviderById, getAllProviders, getMyBookings } from './lib/db';
 import './darkmode.css';
 
-import AuthModal        from './components/AuthModal';
-import BookingModal     from './components/BookingModal';
-import PostServiceModal from './components/PostServiceModal';
-import { Toast }        from './components/UI';
+import AuthModal          from './components/AuthModal';
+import BookingModal       from './components/BookingModal';
+import PostServiceModal   from './components/PostServiceModal';
+import { Toast }          from './components/UI';
 
-import LandingPage   from './pages/LandingPage';
-import CustomerPage  from './pages/CustomerPage';
-import ProviderPage  from './pages/ProviderPage';
-import AdminPage     from './pages/AdminPage';
-import SettingsPage  from './pages/SettingsPage';
+import LandingPage       from './pages/LandingPage';
+import CustomerPage      from './pages/CustomerPage';
+import ProviderPage      from './pages/ProviderPage';
+import AdminPage         from './pages/AdminPage';
+import SettingsPage      from './pages/SettingsPage';
+import PublicProfilePage from './pages/PublicProfilePage';
 
-function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook, darkMode }) {
+function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
   return (
     <nav className="nav">
       <div className="nav-logo" onClick={() => setPage('home')} style={{ cursor: 'pointer' }}>
@@ -24,60 +25,22 @@ function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook, dar
         </svg>
         Volun<span>teer</span>
       </div>
-
       <div style={{ display: 'flex', gap: 4 }}>
         {[['home','Home'],['customer','My Bookings'],['provider','Provider'],['admin','Admin']].map(([k,l]) => (
           <button key={k} className={`nav-tab ${page === k ? 'active' : ''}`} onClick={() => setPage(k)}>{l}</button>
         ))}
       </div>
-
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         {user ? (
           <>
-            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
-              Hi, {profile?.name?.split(' ')[0] || 'there'}
-            </span>
-            {/* Settings gear */}
-            <button
-              onClick={() => setPage('settings')}
-              style={{
-                background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none',
-                border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
-                fontSize: 18, padding: '6px 8px', borderRadius: 8, transition: 'all .2s',
-              }}
-              title="Settings"
-            >
-              ⚙️
-            </button>
-            <button
-              className="btn-outline btn-sm"
-              style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }}
-              onClick={onSignOut}
-            >
-              Sign Out
-            </button>
+            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Hi, {profile?.name?.split(' ')[0] || 'there'}</span>
+            <button onClick={() => setPage('settings')} style={{ background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: '6px 8px', borderRadius: 8 }}>⚙️</button>
+            <button className="btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignOut}>Sign Out</button>
           </>
         ) : (
           <>
-            {/* Settings gear even when signed out */}
-            <button
-              onClick={() => setPage('settings')}
-              style={{
-                background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none',
-                border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
-                fontSize: 18, padding: '6px 8px', borderRadius: 8,
-              }}
-              title="Settings"
-            >
-              ⚙️
-            </button>
-            <button
-              className="btn-outline btn-sm"
-              style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }}
-              onClick={onSignIn}
-            >
-              Sign In
-            </button>
+            <button onClick={() => setPage('settings')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: '6px 8px', borderRadius: 8 }}>⚙️</button>
+            <button className="btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignIn}>Sign In</button>
           </>
         )}
         <button className="btn-primary btn-sm" onClick={onBook}>Book Now</button>
@@ -88,6 +51,8 @@ function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook, dar
 
 export default function App() {
   const [page,            setPage]            = useState('home');
+  const [viewProfileId,   setViewProfileId]   = useState(null);
+  const [bookProviderId,  setBookProviderId]   = useState(null);
   const [user,            setUser]            = useState(null);
   const [profile,         setProfile]         = useState(null);
   const [providerProfile, setProviderProfile] = useState(null);
@@ -99,18 +64,10 @@ export default function App() {
   const [showPost,        setShowPost]        = useState(false);
   const [toast,           setToast]           = useState(null);
   const [loading,         setLoading]         = useState(true);
-
-  // ---- DARK MODE — load from localStorage on startup ----
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('volunteer_dark_mode') === 'true';
-  });
+  const [darkMode,        setDarkMode]        = useState(() => localStorage.getItem('volunteer_dark_mode') === 'true');
 
   useEffect(() => {
-    if (darkMode) {
-      document.body.classList.add('dark');
-    } else {
-      document.body.classList.remove('dark');
-    }
+    document.body.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
   const showToast = useCallback(msg => setToast(msg), []);
@@ -127,21 +84,13 @@ export default function App() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setAuthMode('reset');
-        setShowAuth(true);
-        return;
-      }
+      if (event === 'PASSWORD_RECOVERY') { setAuthMode('reset'); setShowAuth(true); return; }
       if (session?.user) loadUser(session.user);
       else { setUser(null); setProfile(null); setProviderProfile(null); }
     });
 
-    // Also check URL params for reset redirect
     const params = new URLSearchParams(window.location.search);
-    if (params.get('reset') === 'true') {
-      setAuthMode('reset');
-      setShowAuth(true);
-    }
+    if (params.get('reset') === 'true') { setAuthMode('reset'); setShowAuth(true); }
 
     loadProviders();
     return () => subscription.unsubscribe();
@@ -174,14 +123,22 @@ export default function App() {
   const handlePostSuccess = (prov) => {
     setProviderProfile(prov);
     loadProviders();
-    showToast('Provider profile published!');
+    showToast('Profile saved!');
     setPage('provider');
   };
 
-  const openBook = useCallback(() => {
+  // Open booking modal — optionally pre-fill provider
+  const openBook = useCallback((providerId = null) => {
     if (!user) { setShowAuth(true); return; }
+    setBookProviderId(providerId);
     setShowBook(true);
   }, [user]);
+
+  // View a provider's public profile
+  const viewProfile = useCallback((providerId) => {
+    setViewProfileId(providerId);
+    setPage('profile');
+  }, []);
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
@@ -192,39 +149,24 @@ export default function App() {
 
   return (
     <div>
-      <Navbar
-        page={page} setPage={setPage}
-        user={user} profile={profile}
-        onSignIn={() => setShowAuth(true)}
-        onSignOut={handleSignOut}
-        onBook={openBook}
-        darkMode={darkMode}
-      />
+      <Navbar page={page} setPage={setPage} user={user} profile={profile} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut} onBook={() => openBook()} />
 
-      {page === 'home'     && <LandingPage  providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} />}
-      {page === 'customer' && <CustomerPage userId={user?.id} onBook={openBook} />}
+      {page === 'home'     && <LandingPage  providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} onViewProfile={viewProfile} />}
+      {page === 'customer' && <CustomerPage userId={user?.id} onBook={() => openBook()} />}
       {page === 'provider' && (
         <ProviderPage
-          userId={user?.id}
-          profile={profile}
-          providerProfile={providerProfile}
+          userId={user?.id} profile={profile} providerProfile={providerProfile}
           onPost={() => { if (!user) { setShowAuth(true); return; } setShowPost(true); }}
           onRefresh={loadProviders}
         />
       )}
       {page === 'admin'    && <AdminPage />}
-      {page === 'settings' && (
-        <SettingsPage
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
-          user={user}
-          profile={profile}
-        />
-      )}
+      {page === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} user={user} profile={profile} />}
+      {page === 'profile'  && <PublicProfilePage providerId={viewProfileId} onBook={openBook} onBack={() => setPage('home')} />}
 
       {showAuth && <AuthModal onClose={() => { setShowAuth(false); setAuthMode('signin'); }} onSuccess={() => showToast('Welcome!')} initialMode={authMode} />}
-      {showBook && <BookingModal onClose={() => setShowBook(false)} onSuccess={handleBookSuccess} providers={providers} userId={user?.id} />}
-      {showPost && <PostServiceModal onClose={() => setShowPost(false)} onSuccess={handlePostSuccess} userId={user?.id} />}
+      {showBook && <BookingModal onClose={() => { setShowBook(false); setBookProviderId(null); }} onSuccess={handleBookSuccess} providers={providers} userId={user?.id} preselectedProviderId={bookProviderId} />}
+      {showPost && <PostServiceModal onClose={() => setShowPost(false)} onSuccess={handlePostSuccess} userId={user?.id} existing={providerProfile} />}
       {toast    && <Toast msg={toast} onClose={() => setToast(null)} />}
     </div>
   );

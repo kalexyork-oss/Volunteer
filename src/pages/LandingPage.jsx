@@ -7,17 +7,30 @@ const REVIEWS = [
   { name: 'Linda K.', text: 'Deep cleaned my house before listing. Got $15k over asking price!', service: 'Deep Cleaning', before: '🏠', after: '💎' },
 ];
 
-export default function LandingPage({ providers, bookings, onBook, setPage }) {
+function ProviderAvatar({ provider, size = 48 }) {
+  const name = provider?.profiles?.name || 'P';
+  const url  = provider?.profiles?.avatar_url;
+  const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+  if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />;
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Sora', fontWeight: 700, fontSize: size * 0.35, color: 'white', flexShrink: 0 }}>
+      {initials}
+    </div>
+  );
+}
+
+export default function LandingPage({ providers, bookings, onBook, setPage, onViewProfile }) {
   const [search, setSearch] = useState('');
-const onlineProviders = providers.filter(p => p.available !== false);
-  const filtered = (search
-  ? onlineProviders.filter(p =>
-      (p.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())) ||
-      (p.profiles?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.headline || '').toLowerCase().includes(search.toLowerCase())
-    )
-  : onlineProviders);
-    
+
+  const onlineProviders = providers.filter(p => p.available !== false);
+  const filtered = search
+    ? onlineProviders.filter(p =>
+        (p.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())) ||
+        (p.profiles?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.headline || '').toLowerCase().includes(search.toLowerCase())
+      )
+    : onlineProviders;
+
   const totalCompleted = (bookings || []).filter(b => b.status === 'Completed').length;
 
   return (
@@ -38,11 +51,11 @@ const onlineProviders = providers.filter(p => p.available !== false);
             Connect with skilled neighbors who can help with anything.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="btn-primary" style={{ fontSize: 16, padding: '14px 28px' }} onClick={onBook}>Book a Service</button>
+            <button className="btn-primary" style={{ fontSize: 16, padding: '14px 28px' }} onClick={() => onBook()}>Book a Service</button>
             <button className="btn-outline" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', fontSize: 16, padding: '14px 28px' }} onClick={() => setPage('provider')}>Offer Your Skills</button>
           </div>
           <div style={{ display: 'flex', gap: 32, justifyContent: 'center', marginTop: 40 }}>
-            {[['500+','Tasks Posted'], [totalCompleted + '','Jobs Completed'], ['4.9 ★','Avg Rating']].map(([v, l]) => (
+            {[['500+','Tasks Posted'],[totalCompleted+'','Jobs Completed'],['4.9 ★','Avg Rating']].map(([v,l]) => (
               <div key={l} style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: 'white', fontFamily: 'Sora' }}>{v}</div>
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>{l}</div>
@@ -55,7 +68,7 @@ const onlineProviders = providers.filter(p => p.available !== false);
       {/* SEARCH */}
       <div className="section">
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h2 style={{ fontSize: 28, color: 'var(--navy)', marginBottom: 8 }}>Find a Provider</h2>
+          <h2 style={{ fontSize: 28, color: 'var(--gray-800)', marginBottom: 8 }}>Find a Provider</h2>
           <p style={{ color: 'var(--gray-500)' }}>Search by skill, service, or name</p>
         </div>
         <div className="search-bar" style={{ maxWidth: 600, margin: '0 auto 24px' }}>
@@ -72,8 +85,8 @@ const onlineProviders = providers.filter(p => p.available !== false);
           <div className="empty-state">
             <div style={{ fontSize: 48, marginBottom: 8 }}>🔍</div>
             <h3 style={{ marginBottom: 4 }}>{search ? `No providers found for "${search}"` : 'No providers yet'}</h3>
-            <p style={{ marginBottom: 16 }}>Be the first! Post an open request and local helpers will respond.</p>
-            <button className="btn-primary" onClick={onBook}>Post a Request</button>
+            <p style={{ marginBottom: 16 }}>Post an open request and local helpers will respond.</p>
+            <button className="btn-primary" onClick={() => onBook()}>Post a Request</button>
           </div>
         ) : (
           <div className="grid-3">
@@ -81,32 +94,42 @@ const onlineProviders = providers.filter(p => p.available !== false);
               <div key={p.id} className="provider-card">
                 <div style={{ padding: '20px 20px 0' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 18, flexShrink: 0 }}>
-                      {(p.profiles?.name || 'P').split(' ').map(w => w[0]).join('').slice(0,2)}
-                    </div>
+                    <ProviderAvatar provider={p} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 15 }}>{p.profiles?.name}</div>
                       <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{p.headline}</div>
-                      {p.rating && (
+                      {p.rating > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                           {[1,2,3,4,5].map(i => <span key={i} style={{ color: i <= Math.round(p.rating) ? '#f59e0b' : '#e2e8f0', fontSize: 13 }}>★</span>)}
-                          <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>{p.review_count} reviews</span>
+                          <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>({p.review_count})</span>
                         </div>
                       )}
                     </div>
                     <span className="badge badge-green" style={{ fontSize: 11, flexShrink: 0 }}>● Open</span>
                   </div>
-                  {p.bio && <p style={{ fontSize: 13, color: 'var(--gray-600)', lineHeight: 1.6, marginBottom: 12 }}>{p.bio}</p>}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-                    {(p.skills || []).map(s => <span key={s} className="badge badge-gray" style={{ fontSize: 11 }}>{s}</span>)}
+
+                  {p.bio && <p style={{ fontSize: 13, color: 'var(--gray-600)', lineHeight: 1.6, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.bio}</p>}
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 14 }}>
+                    {(p.skills || []).slice(0,4).map(s => <span key={s} className="badge badge-gray" style={{ fontSize: 11 }}>{s}</span>)}
+                    {(p.skills || []).length > 4 && <span className="badge badge-gray" style={{ fontSize: 11 }}>+{p.skills.length - 4}</span>}
                   </div>
                 </div>
+
                 <div style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>
-                    📍 {p.zip}
-                    {p.hourly_rate ? ` · $${p.hourly_rate}/hr` : ''}
-                  </span>
-                  <button className="btn-primary btn-sm" onClick={onBook}>Book Now</button>
+                  <div>
+                    <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>📍 {p.profiles?.zip || p.zip}</span>
+                    {p.hourly_rate && <span style={{ fontSize: 13, color: 'var(--gray-500)', marginLeft: 8 }}>· ${p.hourly_rate}/hr</span>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => onViewProfile && onViewProfile(p.id)}
+                      style={{ background: 'none', border: '1.5px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--gray-600)', fontWeight: 500 }}
+                    >
+                      View
+                    </button>
+                    <button className="btn-primary btn-sm" onClick={() => onBook(p.id)}>Book</button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -143,13 +166,13 @@ const onlineProviders = providers.filter(p => p.available !== false);
 
       {/* HOW IT WORKS */}
       <div className="section" style={{ textAlign: 'center' }}>
-        <h2 style={{ fontSize: 28, color: 'var(--navy)', marginBottom: 8 }}>How Volunteer works</h2>
+        <h2 style={{ fontSize: 28, color: 'var(--gray-800)', marginBottom: 8 }}>How Volunteer works</h2>
         <p style={{ color: 'var(--gray-500)', marginBottom: 40 }}>Four simple steps</p>
         <div className="grid-4">
           {[['🔍','Search','Browse providers or describe what you need'],['📅','Book','Pick a date and time that works'],['✅','Done','Your provider shows up and handles it'],['⭐','Review','Rate your experience']].map(([icon,title,desc],i) => (
             <div key={i}>
               <div style={{ width: 56, height: 56, background: 'var(--navy)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, margin: '0 auto 16px' }}>{icon}</div>
-              <h3 style={{ fontSize: 16, color: 'var(--navy)', marginBottom: 8 }}>{title}</h3>
+              <h3 style={{ fontSize: 16, color: 'var(--gray-800)', marginBottom: 8 }}>{title}</h3>
               <p style={{ fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>{desc}</p>
             </div>
           ))}
