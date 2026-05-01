@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase';
 import { getProfile, getProviderById, getAllProviders, getMyBookings } from './lib/db';
+import './darkmode.css';
 
 import AuthModal        from './components/AuthModal';
 import BookingModal     from './components/BookingModal';
 import PostServiceModal from './components/PostServiceModal';
 import { Toast }        from './components/UI';
 
-import LandingPage  from './pages/LandingPage';
-import CustomerPage from './pages/CustomerPage';
-import ProviderPage from './pages/ProviderPage';
-import AdminPage    from './pages/AdminPage';
+import LandingPage   from './pages/LandingPage';
+import CustomerPage  from './pages/CustomerPage';
+import ProviderPage  from './pages/ProviderPage';
+import AdminPage     from './pages/AdminPage';
+import SettingsPage  from './pages/SettingsPage';
 
-// ---- Navbar ----
-function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
+function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook, darkMode }) {
   return (
     <nav className="nav">
       <div className="nav-logo" onClick={() => setPage('home')} style={{ cursor: 'pointer' }}>
@@ -33,11 +34,51 @@ function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         {user ? (
           <>
-            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Hi, {profile?.name?.split(' ')[0] || 'there'}</span>
-            <button className="btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignOut}>Sign Out</button>
+            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
+              Hi, {profile?.name?.split(' ')[0] || 'there'}
+            </span>
+            {/* Settings gear */}
+            <button
+              onClick={() => setPage('settings')}
+              style={{
+                background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none',
+                border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
+                fontSize: 18, padding: '6px 8px', borderRadius: 8, transition: 'all .2s',
+              }}
+              title="Settings"
+            >
+              ⚙️
+            </button>
+            <button
+              className="btn-outline btn-sm"
+              style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }}
+              onClick={onSignOut}
+            >
+              Sign Out
+            </button>
           </>
         ) : (
-          <button className="btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignIn}>Sign In</button>
+          <>
+            {/* Settings gear even when signed out */}
+            <button
+              onClick={() => setPage('settings')}
+              style={{
+                background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none',
+                border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
+                fontSize: 18, padding: '6px 8px', borderRadius: 8,
+              }}
+              title="Settings"
+            >
+              ⚙️
+            </button>
+            <button
+              className="btn-outline btn-sm"
+              style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }}
+              onClick={onSignIn}
+            >
+              Sign In
+            </button>
+          </>
         )}
         <button className="btn-primary btn-sm" onClick={onBook}>Book Now</button>
       </div>
@@ -58,15 +99,26 @@ export default function App() {
   const [toast,           setToast]           = useState(null);
   const [loading,         setLoading]         = useState(true);
 
+  // ---- DARK MODE — load from localStorage on startup ----
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('volunteer_dark_mode') === 'true';
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  }, [darkMode]);
+
   const showToast = useCallback(msg => setToast(msg), []);
 
-  // Load providers on mount
   const loadProviders = useCallback(async () => {
     const { data } = await getAllProviders();
     setProviders(data || []);
   }, []);
 
-  // Load user session on mount
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) loadUser(session.user);
@@ -79,23 +131,18 @@ export default function App() {
     });
 
     loadProviders();
-
     return () => subscription.unsubscribe();
   }, [loadProviders]);
 
   const loadUser = async (u) => {
     setUser(u);
-    const { data: p } = await getProfile(u.id);
-    setProfile(p);
+    const { data: p }    = await getProfile(u.id);
     const { data: prov } = await getProviderById(u.id);
+    const { data: b }    = await getMyBookings(u.id);
+    setProfile(p);
     setProviderProfile(prov);
-    const { data: b } = await getMyBookings(u.id);
     setBookings(b || []);
     setLoading(false);
-  };
-
-  const handleAuthSuccess = (u) => {
-    showToast('Welcome to Volunteer!');
   };
 
   const handleSignOut = async () => {
@@ -138,6 +185,7 @@ export default function App() {
         onSignIn={() => setShowAuth(true)}
         onSignOut={handleSignOut}
         onBook={openBook}
+        darkMode={darkMode}
       />
 
       {page === 'home'     && <LandingPage  providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} />}
@@ -151,28 +199,20 @@ export default function App() {
           onRefresh={loadProviders}
         />
       )}
-      {page === 'admin' && <AdminPage />}
-
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={handleAuthSuccess} />}
-
-      {showBook && (
-        <BookingModal
-          onClose={() => setShowBook(false)}
-          onSuccess={handleBookSuccess}
-          providers={providers}
-          userId={user?.id}
+      {page === 'admin'    && <AdminPage />}
+      {page === 'settings' && (
+        <SettingsPage
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          user={user}
+          profile={profile}
         />
       )}
 
-      {showPost && (
-        <PostServiceModal
-          onClose={() => setShowPost(false)}
-          onSuccess={handlePostSuccess}
-          userId={user?.id}
-        />
-      )}
-
-      {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => showToast('Welcome!')} />}
+      {showBook && <BookingModal onClose={() => setShowBook(false)} onSuccess={handleBookSuccess} providers={providers} userId={user?.id} />}
+      {showPost && <PostServiceModal onClose={() => setShowPost(false)} onSuccess={handlePostSuccess} userId={user?.id} />}
+      {toast    && <Toast msg={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }
