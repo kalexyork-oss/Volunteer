@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase';
 import { getProfile, getProviderById, getAllProviders, getMyBookings } from './lib/db';
+import { sendNotification, sendSMSNotification } from './lib/notifications';
 import './darkmode.css';
 
 import AuthModal          from './components/AuthModal';
 import BookingModal       from './components/BookingModal';
 import PostServiceModal   from './components/PostServiceModal';
+import NotificationBell   from './components/NotificationBell';
+import ChatModal          from './components/ChatModal';
 import { Toast }          from './components/UI';
 
 import LandingPage       from './pages/LandingPage';
@@ -14,7 +17,10 @@ import ProviderPage      from './pages/ProviderPage';
 import AdminPage         from './pages/AdminPage';
 import SettingsPage      from './pages/SettingsPage';
 import PublicProfilePage from './pages/PublicProfilePage';
+import MessagesPage      from './pages/MessagesPage';
+import MapPage           from './pages/MapPage';
 
+// ---- Navbar ----
 function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
   return (
     <nav className="nav">
@@ -25,15 +31,28 @@ function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
         </svg>
         Volun<span>teer</span>
       </div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {[['home','Home'],['customer','My Bookings'],['provider','Provider'],['admin','Admin']].map(([k,l]) => (
-          <button key={k} className={`nav-tab ${page === k ? 'active' : ''}`} onClick={() => setPage(k)}>{l}</button>
+
+      <div style={{ display: 'flex', gap: 2 }}>
+        {[
+          ['home',     'Home'],
+          ['map',      '🗺️ Map'],
+          ['customer', 'Bookings'],
+          ['messages', '💬 Messages'],
+          ['provider', 'Provider'],
+          ['admin',    'Admin'],
+        ].map(([k, l]) => (
+          <button key={k} className={`nav-tab ${page === k ? 'active' : ''}`} onClick={() => setPage(k)}
+            style={{ fontSize: 13, padding: '8px 12px' }}>
+            {l}
+          </button>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {user ? (
           <>
             <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Hi, {profile?.name?.split(' ')[0] || 'there'}</span>
+            <NotificationBell userId={user.id} onNavigate={setPage} />
             <button onClick={() => setPage('settings')} style={{ background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: '6px 8px', borderRadius: 8 }}>⚙️</button>
             <button className="btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignOut}>Sign Out</button>
           </>
@@ -62,13 +81,12 @@ export default function App() {
   const [authMode,        setAuthMode]        = useState('signin');
   const [showBook,        setShowBook]        = useState(false);
   const [showPost,        setShowPost]        = useState(false);
+  const [activeChat,      setActiveChat]      = useState(null);
   const [toast,           setToast]           = useState(null);
   const [loading,         setLoading]         = useState(true);
   const [darkMode,        setDarkMode]        = useState(() => localStorage.getItem('volunteer_dark_mode') === 'true');
 
-  useEffect(() => {
-    document.body.classList.toggle('dark', darkMode);
-  }, [darkMode]);
+  useEffect(() => { document.body.classList.toggle('dark', darkMode); }, [darkMode]);
 
   const showToast = useCallback(msg => setToast(msg), []);
 
@@ -98,9 +116,11 @@ export default function App() {
 
   const loadUser = async (u) => {
     setUser(u);
-    const { data: p }    = await getProfile(u.id);
-    const { data: prov } = await getProviderById(u.id);
-    const { data: b }    = await getMyBookings(u.id);
+    const [{ data: p }, { data: prov }, { data: b }] = await Promise.all([
+      getProfile(u.id),
+      getProviderById(u.id),
+      getMyBookings(u.id),
+    ]);
     setProfile(p);
     setProviderProfile(prov);
     setBookings(b || []);
@@ -114,11 +134,27 @@ export default function App() {
     showToast('Signed out.');
   };
 
-  const handleBookSuccess = (booking) => {
+  const handleBookSuccess = useCallback(async (booking) => {
     setBookings(prev => [booking, ...prev]);
     showToast(booking.provider_id ? 'Booking confirmed!' : 'Open request posted!');
     setPage('customer');
-  };
+    if (booking.provider_id) {
+      sendNotification('booking_received', { bookingId: booking.id, providerId: booking.provider_id, customerId: user?.id });
+      sendSMSNotification('booking_received', { bookingId: booking.id, providerId: booking.provider_id, customerId: user?.id });
+    }
+  }, [user, showToast]);
+
+  const handleJobAccepted = useCallback(async (booking) => {
+    if (booking?.customer_id) {
+      sendNotification('booking_accepted', { bookingId: booking.id, providerId: user?.id, customerId: booking.customer_id });
+    }
+  }, [user]);
+
+  const handleJobCompleted = useCallback(async (booking) => {
+    if (booking?.customer_id) {
+      sendNotification('booking_completed', { bookingId: booking.id, providerId: user?.id, customerId: booking.customer_id });
+    }
+  }, [user]);
 
   const handlePostSuccess = (prov) => {
     setProviderProfile(prov);
@@ -127,14 +163,12 @@ export default function App() {
     setPage('provider');
   };
 
-  // Open booking modal — optionally pre-fill provider
   const openBook = useCallback((providerId = null) => {
     if (!user) { setShowAuth(true); return; }
     setBookProviderId(providerId);
     setShowBook(true);
   }, [user]);
 
-  // View a provider's public profile
   const viewProfile = useCallback((providerId) => {
     setViewProfileId(providerId);
     setPage('profile');
@@ -151,23 +185,28 @@ export default function App() {
     <div>
       <Navbar page={page} setPage={setPage} user={user} profile={profile} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut} onBook={() => openBook()} />
 
-      {page === 'home'     && <LandingPage  providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} onViewProfile={viewProfile} />}
-      {page === 'customer' && <CustomerPage userId={user?.id} onBook={() => openBook()} />}
+      {page === 'home'     && <LandingPage providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} onViewProfile={viewProfile} />}
+      {page === 'map'      && <MapPage providers={providers} onBook={openBook} onViewProfile={viewProfile} />}
+      {page === 'customer' && <CustomerPage userId={user?.id} onBook={() => openBook()} onOpenChat={setActiveChat} />}
+      {page === 'messages' && <MessagesPage currentUserId={user?.id} currentUserName={profile?.name} profile={profile} />}
       {page === 'provider' && (
         <ProviderPage
           userId={user?.id} profile={profile} providerProfile={providerProfile}
           onPost={() => { if (!user) { setShowAuth(true); return; } setShowPost(true); }}
           onRefresh={loadProviders}
+          onJobAccepted={handleJobAccepted}
+          onJobCompleted={handleJobCompleted}
         />
       )}
       {page === 'admin'    && <AdminPage />}
-      {page === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} user={user} profile={profile} />}
+      {page === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} user={user} profile={profile} onProfileUpdate={p => setProfile(p)} />}
       {page === 'profile'  && <PublicProfilePage providerId={viewProfileId} onBook={openBook} onBack={() => setPage('home')} />}
 
-      {showAuth && <AuthModal onClose={() => { setShowAuth(false); setAuthMode('signin'); }} onSuccess={() => showToast('Welcome!')} initialMode={authMode} />}
-      {showBook && <BookingModal onClose={() => { setShowBook(false); setBookProviderId(null); }} onSuccess={handleBookSuccess} providers={providers} userId={user?.id} preselectedProviderId={bookProviderId} />}
-      {showPost && <PostServiceModal onClose={() => setShowPost(false)} onSuccess={handlePostSuccess} userId={user?.id} existing={providerProfile} />}
-      {toast    && <Toast msg={toast} onClose={() => setToast(null)} />}
+      {showAuth  && <AuthModal onClose={() => { setShowAuth(false); setAuthMode('signin'); }} onSuccess={() => showToast('Welcome!')} initialMode={authMode} />}
+      {showBook  && <BookingModal onClose={() => { setShowBook(false); setBookProviderId(null); }} onSuccess={handleBookSuccess} providers={providers} userId={user?.id} preselectedProviderId={bookProviderId} />}
+      {showPost  && <PostServiceModal onClose={() => setShowPost(false)} onSuccess={handlePostSuccess} userId={user?.id} existing={providerProfile} />}
+      {activeChat && <ChatModal booking={activeChat.booking} currentUserId={user?.id} currentUserName={profile?.name} otherUserName={activeChat.otherName} onClose={() => setActiveChat(null)} />}
+      {toast     && <Toast msg={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }

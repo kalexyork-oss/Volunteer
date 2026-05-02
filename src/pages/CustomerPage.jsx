@@ -97,7 +97,7 @@ function ReviewModal({ booking, userId, onClose, onDone }) {
   );
 }
 
-export default function CustomerPage({ userId, onBook }) {
+export default function CustomerPage({ userId, onBook, onOpenChat }) {
   const [bookings,      setBookings]      = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [reviewBooking, setReviewBooking] = useState(null);
@@ -191,7 +191,17 @@ export default function CustomerPage({ userId, onBook }) {
               )}
 
               {/* Action buttons */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                {/* Chat button — show when there's a provider */}
+                {b.provider_id && b.status !== 'Cancelled' && onOpenChat && (
+                  <button
+                    onClick={() => onOpenChat({ booking: b, otherName: b.providers?.profiles?.name || 'Provider' })}
+                    style={{ background: 'none', border: '1.5px solid var(--gray-200)', color: 'var(--navy)', borderRadius: 8, padding: '6px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    💬 Chat
+                  </button>
+                )}
+
                 {/* Cancel button — only for Pending or Accepted */}
                 {(b.status === 'Pending' || b.status === 'Accepted') && (
                   <button
