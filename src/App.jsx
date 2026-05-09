@@ -4,12 +4,12 @@ import { getProfile, getProviderById, getAllProviders, getMyBookings } from './l
 import { sendNotification, sendSMSNotification } from './lib/notifications';
 import './darkmode.css';
 
-import AuthModal          from './components/AuthModal';
-import BookingModal       from './components/BookingModal';
-import PostServiceModal   from './components/PostServiceModal';
-import NotificationBell   from './components/NotificationBell';
-import ChatModal          from './components/ChatModal';
-import { Toast }          from './components/UI';
+import Navbar            from './components/Navbar';
+import AuthModal         from './components/AuthModal';
+import BookingModal      from './components/BookingModal';
+import PostServiceModal  from './components/PostServiceModal';
+import ChatModal         from './components/ChatModal';
+import { Toast }         from './components/UI';
 
 import LandingPage       from './pages/LandingPage';
 import CustomerPage      from './pages/CustomerPage';
@@ -19,54 +19,6 @@ import SettingsPage      from './pages/SettingsPage';
 import PublicProfilePage from './pages/PublicProfilePage';
 import MessagesPage      from './pages/MessagesPage';
 import MapPage           from './pages/MapPage';
-
-// ---- Navbar ----
-function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
-  return (
-    <nav className="nav">
-      <div className="nav-logo" onClick={() => setPage('home')} style={{ cursor: 'pointer' }}>
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="14" r="14" fill="rgba(34,197,94,0.2)" />
-          <path d="M8 14.5l4 4 8-8" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        Volun<span>teer</span>
-      </div>
-
-      <div style={{ display: 'flex', gap: 2 }}>
-        {[
-          ['home',     'Home'],
-          ['map',      'Map'],
-          ['customer', 'Bookings'],
-          ['messages', 'Messages'],
-          ['provider', 'Provider'],
-          ['admin',    'Admin'],
-        ].map(([k, l]) => (
-          <button key={k} className={`nav-tab ${page === k ? 'active' : ''}`} onClick={() => setPage(k)}
-            style={{ fontSize: 13, padding: '8px 12px' }}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {user ? (
-          <>
-            <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Hi, {profile?.name?.split(' ')[0] || 'there'}</span>
-            <NotificationBell userId={user.id} onNavigate={setPage} />
-            <button onClick={() => setPage('settings')} style={{ background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: '6px 8px', borderRadius: 8 }}>⚙️</button>
-            <button className="btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignOut}>Sign Out</button>
-          </>
-        ) : (
-          <>
-            <button onClick={() => setPage('settings')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: '6px 8px', borderRadius: 8 }}>⚙️</button>
-            <button className="btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignIn}>Sign In</button>
-          </>
-        )}
-        <button className="btn-primary btn-sm" onClick={onBook}>Book Now</button>
-      </div>
-    </nav>
-  );
-}
 
 export default function App() {
   const [page,            setPage]            = useState('home');
@@ -183,7 +135,15 @@ export default function App() {
 
   return (
     <div>
-      <Navbar page={page} setPage={setPage} user={user} profile={profile} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut} onBook={() => openBook()} />
+      <Navbar
+        page={page}
+        setPage={setPage}
+        user={user}
+        profile={profile}
+        onSignIn={() => setShowAuth(true)}
+        onSignOut={handleSignOut}
+        onBook={() => openBook()}
+      />
 
       {page === 'home'     && <LandingPage providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} onViewProfile={viewProfile} />}
       {page === 'map'      && <MapPage providers={providers} onBook={openBook} onViewProfile={viewProfile} />}
