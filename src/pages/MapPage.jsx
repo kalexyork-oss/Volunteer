@@ -61,28 +61,48 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
   const mappable = filtered.filter(p => p.lat && p.lng);
   const unmapped = filtered.filter(p => !p.lat || !p.lng);
 
+  // Load Leaflet script once
   useEffect(() => {
     if (window.L) { setMapLoaded(true); return; }
     const link = document.createElement('link'); link.rel='stylesheet'; link.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(link);
     const s = document.createElement('script'); s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; s.onload=()=>setMapLoaded(true); document.head.appendChild(s);
   }, []);
 
+  // Get user location once
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(pos => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); }, ()=>{});
   }, []);
 
+  // Init map — destroy on unmount so it rebuilds cleanly when navigating back
   useEffect(() => {
-    if (!mapLoaded || !mapRef.current || mapInstance.current) return;
+    if (!mapLoaded || !mapRef.current) return;
+    if (mapInstance.current) return; // already initialized this mount
+
     const L = window.L;
-    mapInstance.current = L.map(mapRef.current).setView([userLat, userLng], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(mapInstance.current);
+    const map = L.map(mapRef.current).setView([userLat, userLng], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+    mapInstance.current = map;
+
+    // Cleanup: destroy the map when the component unmounts
+    return () => {
+      if (mapInstance.current) {
+        mapInstance.current.remove();
+        mapInstance.current = null;
+      }
+      markersRef.current = {};
+      userMarker.current = null;
+    };
   }, [mapLoaded]);
 
+  // Invalidate size when switching back to map tab on mobile
   useEffect(() => {
-    if (mobileView === 'map' && mapInstance.current) setTimeout(() => mapInstance.current.invalidateSize(), 150);
+    if (mobileView === 'map' && mapInstance.current) {
+      setTimeout(() => mapInstance.current.invalidateSize(), 150);
+    }
   }, [mobileView]);
 
+  // User location marker
   useEffect(() => {
     if (!mapLoaded || !mapInstance.current) return;
     const L = window.L;
@@ -91,6 +111,7 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
     userMarker.current = L.marker([userLat, userLng], { icon }).addTo(mapInstance.current).bindPopup('You are here');
   }, [mapLoaded, userLat, userLng]);
 
+  // Provider markers
   useEffect(() => {
     if (!mapLoaded || !mapInstance.current) return;
     const L = window.L;
@@ -127,10 +148,10 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
     else { mapInstance.current?.flyTo([p.lat,p.lng],14,{duration:.8}); markersRef.current[p.id]?.openPopup(); }
   };
 
-  const navH  = 64;
-  const tabH  = 60; // bottom tab bar on mobile
+  const navH    = 64;
+  const tabH    = 60;
   const toggleH = 42;
-  const totalH = isMobile ? `calc(100vh - ${navH}px - ${tabH}px)` : `calc(100vh - ${navH}px)`;
+  const totalH  = isMobile ? `calc(100vh - ${navH}px - ${tabH}px)` : `calc(100vh - ${navH}px)`;
 
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: totalH, overflow: 'hidden' }}>
@@ -138,7 +159,7 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
       {/* Mobile toggle */}
       {isMobile && (
         <div style={{ display: 'flex', background: 'var(--navy)', height: toggleH, flexShrink: 0 }}>
-          {[['map','🗺️ Map'],['list','📋 List']].map(([k,l])=>(
+          {[['map','Map'],['list','List']].map(([k,l])=>(
             <button key={k} onClick={()=>setMobileView(k)} style={{ flex:1, border:'none', cursor:'pointer', fontSize:14, fontWeight:600, background: mobileView===k?'rgba(255,255,255,0.15)':'transparent', color: mobileView===k?'white':'rgba(255,255,255,0.6)', borderBottom: mobileView===k?'3px solid var(--green)':'3px solid transparent' }}>{l}</button>
           ))}
         </div>
@@ -155,7 +176,7 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
             </div>
             <div style={{ display:'flex', justifyContent:'space-between', marginTop:8 }}>
               <span style={{ fontSize:12, color:'var(--gray-500)' }}>{mappable.length} on map</span>
-              <button onClick={locateUser} disabled={locating} style={{ background:'none', border:'1px solid var(--gray-200)', borderRadius:8, padding:'4px 10px', fontSize:12, cursor:'pointer', color:'var(--gray-600)' }}>{locating?'⏳':'📍'} My Location</button>
+              <button onClick={locateUser} disabled={locating} style={{ background:'none', border:'1px solid var(--gray-200)', borderRadius:8, padding:'4px 10px', fontSize:12, cursor:'pointer', color:'var(--gray-600)' }}>{locating?'Locating...':'My Location'}</button>
             </div>
           </div>
           <div style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:10 }}>
