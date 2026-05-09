@@ -35,9 +35,9 @@ function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
       <div style={{ display: 'flex', gap: 2 }}>
         {[
           ['home',     'Home'],
-          ['map',      '🗺️ Map'],
+          ['map',      'Map'],
           ['customer', 'Bookings'],
-          ['messages', '💬 Messages'],
+          ['messages', 'Messages'],
           ['provider', 'Provider'],
           ['admin',    'Admin'],
         ].map(([k, l]) => (
