@@ -71,10 +71,10 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
   const unmapped = filtered.filter(p => !p.lat || !p.lng);
 
   // navbar=64, bottom tabs=60, toggle=42
-  const contentH = isMobile ? vh - 64 - 60 : vh - 64;
+  const contentH  = isMobile ? vh - 64 - 60 : vh - 64;
   const mapPanelH = isMobile ? contentH - 42 : contentH;
 
-  // Load Leaflet script
+  // Load Leaflet
   useEffect(() => {
     if (window.L) { setMapLoaded(true); return; }
     const link = document.createElement('link');
@@ -96,17 +96,18 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
     );
   }, []);
 
-  // Init map + destroy on unmount
+  // Init map — uses explicit pixel height, destroy on unmount
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || mapInstance.current) return;
     const L = window.L;
+    // Set explicit pixel height on the div BEFORE Leaflet measures it
+    mapRef.current.style.height = `${mapPanelH}px`;
     const map = L.map(mapRef.current).setView([userLat, userLng], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap', maxZoom: 19
     }).addTo(map);
     mapInstance.current = map;
-    // Give the DOM time to paint before measuring
-    setTimeout(() => map.invalidateSize(), 400);
+    setTimeout(() => map.invalidateSize(), 300);
 
     return () => {
       if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
@@ -115,14 +116,16 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
     };
   }, [mapLoaded]);
 
-  // Invalidate when switching to map tab or vh changes
+  // Update map div height and invalidate whenever vh or tab changes
   useEffect(() => {
-    if (mobileView === 'map' && mapInstance.current) {
+    if (!mapInstance.current) return;
+    if (mapRef.current) mapRef.current.style.height = `${mapPanelH}px`;
+    if (mobileView === 'map') {
       setTimeout(() => mapInstance.current.invalidateSize(), 200);
     }
-  }, [mobileView, vh]);
+  }, [mobileView, mapPanelH]);
 
-  // User location marker
+  // User dot marker
   useEffect(() => {
     if (!mapLoaded || !mapInstance.current) return;
     const L = window.L;
@@ -143,9 +146,9 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
     Object.values(markersRef.current).forEach(m => m.remove());
     markersRef.current = {};
     mappable.forEach(p => {
-      const name = p.profiles?.name || 'P';
+      const name     = p.profiles?.name || 'P';
       const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-      const bg = selected?.id === p.id ? '#22c55e' : '#0f1e3d';
+      const bg       = selected?.id === p.id ? '#22c55e' : '#0f1e3d';
       const icon = L.divIcon({
         html: `<div style="width:40px;height:40px;background:${bg};border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;box-shadow:0 3px 10px rgba(0,0,0,.3);font-family:Sora,sans-serif">${initials}</div>`,
         className: '', iconSize: [40,40], iconAnchor: [20,20]
@@ -190,10 +193,10 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: `${contentH}px`, overflow: 'hidden' }}>
 
-      {/* Mobile toggle bar */}
+      {/* Mobile Map / Providers Near You toggle */}
       {isMobile && (
         <div style={{ display: 'flex', background: 'var(--navy)', height: 42, flexShrink: 0 }}>
-          {[['map','Map'], ['list','Providers Near You']].map(([k, l]) => (
+          {[['map', 'Map'], ['list', 'Providers Near You']].map(([k, l]) => (
             <button key={k} onClick={() => setMobileView(k)} style={{
               flex: 1, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
               background: mobileView === k ? 'rgba(255,255,255,0.15)' : 'transparent',
@@ -254,7 +257,8 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
       {/* Map panel */}
       {(!isMobile || mobileView === 'map') && (
         <div style={{ flex: 1, position: 'relative', height: `${mapPanelH}px` }}>
-          <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+          {/* Explicit pixel height set here AND imperatively in useEffect */}
+          <div ref={mapRef} style={{ width: '100%', height: `${mapPanelH}px` }} />
           {!mapLoaded && (
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gray-50)', flexDirection: 'column', gap: 12 }}>
               <p style={{ color: 'var(--gray-500)' }}>Loading map...</p>
