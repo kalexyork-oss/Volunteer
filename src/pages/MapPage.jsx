@@ -47,68 +47,93 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
   const [mapLoaded,  setMapLoaded]  = useState(!!window.L);
   const [mobileView, setMobileView] = useState('map');
   const [isMobile,   setIsMobile]   = useState(window.innerWidth < 768);
+  const [vh,         setVh]         = useState(window.innerHeight);
 
   useEffect(() => {
-    const h = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
+    const update = () => {
+      setIsMobile(window.innerWidth < 768);
+      setVh(window.innerHeight);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, []);
 
   const online   = providers.filter(p => p.available !== false);
   const filtered = useMemo(() => search
-    ? online.filter(p => (p.profiles?.name||'').toLowerCase().includes(search.toLowerCase()) || (p.skills||[]).some(s=>s.toLowerCase().includes(search.toLowerCase())))
-    : online, [online, search]);
+    ? online.filter(p =>
+        (p.profiles?.name||'').toLowerCase().includes(search.toLowerCase()) ||
+        (p.skills||[]).some(s => s.toLowerCase().includes(search.toLowerCase()))
+      )
+    : online,
+  [online, search]);
   const mappable = filtered.filter(p => p.lat && p.lng);
   const unmapped = filtered.filter(p => !p.lat || !p.lng);
 
-  // Load Leaflet script once
+  // navbar=64, bottom tabs=60, toggle=42
+  const contentH = isMobile ? vh - 64 - 60 : vh - 64;
+  const mapPanelH = isMobile ? contentH - 42 : contentH;
+
+  // Load Leaflet script
   useEffect(() => {
     if (window.L) { setMapLoaded(true); return; }
-    const link = document.createElement('link'); link.rel='stylesheet'; link.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(link);
-    const s = document.createElement('script'); s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; s.onload=()=>setMapLoaded(true); document.head.appendChild(s);
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = () => setMapLoaded(true);
+    document.head.appendChild(s);
   }, []);
 
-  // Get user location once
+  // Get GPS once
   useEffect(() => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(pos => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); }, ()=>{});
+    navigator.geolocation.getCurrentPosition(
+      pos => { setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude); },
+      () => {}
+    );
   }, []);
 
-  // Init map — destroy on unmount so it rebuilds cleanly when navigating back
+  // Init map + destroy on unmount
   useEffect(() => {
-    if (!mapLoaded || !mapRef.current) return;
-    if (mapInstance.current) return; // already initialized this mount
-
+    if (!mapLoaded || !mapRef.current || mapInstance.current) return;
     const L = window.L;
     const map = L.map(mapRef.current).setView([userLat, userLng], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 19
+    }).addTo(map);
     mapInstance.current = map;
+    // Give the DOM time to paint before measuring
+    setTimeout(() => map.invalidateSize(), 400);
 
-    // Cleanup: destroy the map when the component unmounts
     return () => {
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
-      }
+      if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
       markersRef.current = {};
       userMarker.current = null;
     };
   }, [mapLoaded]);
 
-  // Invalidate size when switching back to map tab on mobile
+  // Invalidate when switching to map tab or vh changes
   useEffect(() => {
     if (mobileView === 'map' && mapInstance.current) {
-      setTimeout(() => mapInstance.current.invalidateSize(), 150);
+      setTimeout(() => mapInstance.current.invalidateSize(), 200);
     }
-  }, [mobileView]);
+  }, [mobileView, vh]);
 
   // User location marker
   useEffect(() => {
     if (!mapLoaded || !mapInstance.current) return;
     const L = window.L;
     if (userMarker.current) userMarker.current.remove();
-    const icon = L.divIcon({ html: `<div style="width:16px;height:16px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(59,130,246,.6)"></div>`, className:'', iconSize:[16,16], iconAnchor:[8,8] });
-    userMarker.current = L.marker([userLat, userLng], { icon }).addTo(mapInstance.current).bindPopup('You are here');
+    const icon = L.divIcon({
+      html: `<div style="width:16px;height:16px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(59,130,246,.6)"></div>`,
+      className: '', iconSize: [16,16], iconAnchor: [8,8]
+    });
+    userMarker.current = L.marker([userLat, userLng], { icon })
+      .addTo(mapInstance.current)
+      .bindPopup('You are here');
   }, [mapLoaded, userLat, userLng]);
 
   // Provider markers
@@ -119,16 +144,21 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
     markersRef.current = {};
     mappable.forEach(p => {
       const name = p.profiles?.name || 'P';
-      const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-      const icon = L.divIcon({ html: `<div style="width:40px;height:40px;background:${selected?.id===p.id?'#22c55e':'#0f1e3d'};border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;box-shadow:0 3px 10px rgba(0,0,0,.3);font-family:Sora,sans-serif">${initials}</div>`, className:'', iconSize:[40,40], iconAnchor:[20,20] });
-      markersRef.current[p.id] = L.marker([p.lat, p.lng], { icon }).addTo(mapInstance.current)
-        .bindPopup(`<div style="font-family:DM Sans,sans-serif;min-width:150px"><b style="color:#0f1e3d">${name}</b><br/><span style="font-size:12px;color:#64748b">${p.headline||''}</span>${p.hourly_rate?`<br/><b style="color:#22c55e">$${p.hourly_rate}/hr</b>`:''}</div>`)
+      const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      const bg = selected?.id === p.id ? '#22c55e' : '#0f1e3d';
+      const icon = L.divIcon({
+        html: `<div style="width:40px;height:40px;background:${bg};border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;box-shadow:0 3px 10px rgba(0,0,0,.3);font-family:Sora,sans-serif">${initials}</div>`,
+        className: '', iconSize: [40,40], iconAnchor: [20,20]
+      });
+      markersRef.current[p.id] = L.marker([p.lat, p.lng], { icon })
+        .addTo(mapInstance.current)
+        .bindPopup(`<div style="font-family:DM Sans,sans-serif;min-width:150px"><b style="color:#0f1e3d">${name}</b><br/><span style="font-size:12px;color:#64748b">${p.headline||''}</span>${p.hourly_rate ? `<br/><b style="color:#22c55e">$${p.hourly_rate}/hr</b>` : ''}</div>`)
         .on('click', () => { setSelected(p); if (isMobile) setMobileView('list'); });
     });
     if (mappable.length > 0 && !selected) {
-      const bounds = L.latLngBounds(mappable.map(p=>[p.lat,p.lng]));
+      const bounds = L.latLngBounds(mappable.map(p => [p.lat, p.lng]));
       bounds.extend([userLat, userLng]);
-      mapInstance.current.fitBounds(bounds, { padding:[40,40], maxZoom:13 });
+      mapInstance.current.fitBounds(bounds, { padding: [40,40], maxZoom: 13 });
     }
   }, [mapLoaded, mappable, selected, isMobile]);
 
@@ -136,68 +166,103 @@ export default function MapPage({ providers, onBook, onViewProfile }) {
     if (!navigator.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(pos => {
-      setUserLat(pos.coords.latitude); setUserLng(pos.coords.longitude);
+      setUserLat(pos.coords.latitude);
+      setUserLng(pos.coords.longitude);
       mapInstance.current?.setView([pos.coords.latitude, pos.coords.longitude], 12);
       setLocating(false);
-    }, ()=>setLocating(false));
+    }, () => setLocating(false));
   };
 
   const flyTo = (p) => {
     setSelected(p);
-    if (isMobile) { setMobileView('map'); setTimeout(()=>{ mapInstance.current?.flyTo([p.lat,p.lng],14,{duration:.8}); markersRef.current[p.id]?.openPopup(); }, 200); }
-    else { mapInstance.current?.flyTo([p.lat,p.lng],14,{duration:.8}); markersRef.current[p.id]?.openPopup(); }
+    if (isMobile) {
+      setMobileView('map');
+      setTimeout(() => {
+        mapInstance.current?.flyTo([p.lat, p.lng], 14, { duration: 0.8 });
+        markersRef.current[p.id]?.openPopup();
+      }, 250);
+    } else {
+      mapInstance.current?.flyTo([p.lat, p.lng], 14, { duration: 0.8 });
+      markersRef.current[p.id]?.openPopup();
+    }
   };
 
-  const navH    = 64;
-  const tabH    = 60;
-  const toggleH = 42;
-  const totalH  = isMobile ? `calc(100vh - ${navH}px - ${tabH}px)` : `calc(100vh - ${navH}px)`;
-
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: totalH, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: `${contentH}px`, overflow: 'hidden' }}>
 
-      {/* Mobile toggle */}
+      {/* Mobile toggle bar */}
       {isMobile && (
-        <div style={{ display: 'flex', background: 'var(--navy)', height: toggleH, flexShrink: 0 }}>
-          {[['map','Map'],['list','List']].map(([k,l])=>(
-            <button key={k} onClick={()=>setMobileView(k)} style={{ flex:1, border:'none', cursor:'pointer', fontSize:14, fontWeight:600, background: mobileView===k?'rgba(255,255,255,0.15)':'transparent', color: mobileView===k?'white':'rgba(255,255,255,0.6)', borderBottom: mobileView===k?'3px solid var(--green)':'3px solid transparent' }}>{l}</button>
+        <div style={{ display: 'flex', background: 'var(--navy)', height: 42, flexShrink: 0 }}>
+          {[['map','Map'], ['list','Providers Near You']].map(([k, l]) => (
+            <button key={k} onClick={() => setMobileView(k)} style={{
+              flex: 1, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: mobileView === k ? 'rgba(255,255,255,0.15)' : 'transparent',
+              color: mobileView === k ? 'white' : 'rgba(255,255,255,0.6)',
+              borderBottom: mobileView === k ? '3px solid var(--green)' : '3px solid transparent'
+            }}>{l}</button>
           ))}
         </div>
       )}
 
       {/* List panel */}
       {(!isMobile || mobileView === 'list') && (
-        <div style={{ width: isMobile?'100%':360, height: isMobile?`calc(${totalH} - ${toggleH}px)`:'100%', display:'flex', flexDirection:'column', background:'white', borderRight: isMobile?'none':'1px solid var(--gray-200)', overflow:'hidden', flexShrink:0 }}>
-          {!isMobile && <div style={{ padding:'16px 16px 8px', borderBottom:'1px solid var(--gray-200)', flexShrink:0 }}><h2 style={{ fontSize:18, color:'var(--navy)', fontFamily:'Sora' }}>Providers Near You</h2></div>}
-          <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--gray-200)', flexShrink:0 }}>
-            <div className="search-bar">
-              <span className="search-icon" style={{ fontSize:15 }}>🔍</span>
-              <input type="text" placeholder="Search providers..." value={search} onChange={e=>setSearch(e.target.value)} style={{ paddingLeft:36, height:40, fontSize:13 }} />
+        <div style={{ width: isMobile ? '100%' : 360, height: `${mapPanelH}px`, display: 'flex', flexDirection: 'column', background: 'white', borderRight: isMobile ? 'none' : '1px solid var(--gray-200)', overflow: 'hidden', flexShrink: 0 }}>
+          {!isMobile && (
+            <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid var(--gray-200)', flexShrink: 0 }}>
+              <h2 style={{ fontSize: 18, color: 'var(--navy)', fontFamily: 'Sora' }}>Providers Near You</h2>
             </div>
-            <div style={{ display:'flex', justifyContent:'space-between', marginTop:8 }}>
-              <span style={{ fontSize:12, color:'var(--gray-500)' }}>{mappable.length} on map</span>
-              <button onClick={locateUser} disabled={locating} style={{ background:'none', border:'1px solid var(--gray-200)', borderRadius:8, padding:'4px 10px', fontSize:12, cursor:'pointer', color:'var(--gray-600)' }}>{locating?'Locating...':'My Location'}</button>
+          )}
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--gray-200)', flexShrink: 0 }}>
+            <div className="search-bar">
+              <span className="search-icon" style={{ fontSize: 15 }}>🔍</span>
+              <input type="text" placeholder="Search providers..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 36, height: 40, fontSize: 13 }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>{mappable.length} on map</span>
+              <button onClick={locateUser} disabled={locating} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: 'var(--gray-600)' }}>
+                {locating ? 'Locating...' : '📍 My Location'}
+              </button>
             </div>
           </div>
-          <div style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:10 }}>
-            {filtered.length===0 ? <div className="empty-state" style={{ padding:32 }}><p>No providers found.</p></div> : (
-              <>
-                {mappable.map(p=><div key={p.id} onClick={()=>flyTo(p)}><ProviderCard provider={p} onBook={onBook} onViewProfile={onViewProfile} isSelected={selected?.id===p.id} /></div>)}
-                {unmapped.length>0&&<><div style={{ fontSize:12, color:'var(--gray-400)', padding:'8px 0', borderTop:'1px solid var(--gray-100)' }}>No location set</div>{unmapped.map(p=><div key={p.id}><ProviderCard provider={p} onBook={onBook} onViewProfile={onViewProfile} isSelected={false} /></div>)}</>}
-              </>
-            )}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filtered.length === 0
+              ? <div className="empty-state" style={{ padding: 32 }}><p>No providers found.</p></div>
+              : (
+                <>
+                  {mappable.map(p => (
+                    <div key={p.id} onClick={() => flyTo(p)}>
+                      <ProviderCard provider={p} onBook={onBook} onViewProfile={onViewProfile} isSelected={selected?.id === p.id} />
+                    </div>
+                  ))}
+                  {unmapped.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 12, color: 'var(--gray-400)', padding: '8px 0', borderTop: '1px solid var(--gray-100)' }}>No location set</div>
+                      {unmapped.map(p => (
+                        <div key={p.id}>
+                          <ProviderCard provider={p} onBook={onBook} onViewProfile={onViewProfile} isSelected={false} />
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              )
+            }
           </div>
         </div>
       )}
 
-      {/* Map */}
+      {/* Map panel */}
       {(!isMobile || mobileView === 'map') && (
-        <div style={{ flex:1, position:'relative', height: isMobile?`calc(${totalH} - ${toggleH}px)`:'100%' }}>
-          <div ref={mapRef} style={{ width:'100%', height:'100%' }} />
-          {!mapLoaded && <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'var(--gray-50)', flexDirection:'column', gap:12 }}><div style={{ fontSize:40 }}>🗺️</div><p style={{ color:'var(--gray-500)' }}>Loading map...</p></div>}
+        <div style={{ flex: 1, position: 'relative', height: `${mapPanelH}px` }}>
+          <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+          {!mapLoaded && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gray-50)', flexDirection: 'column', gap: 12 }}>
+              <p style={{ color: 'var(--gray-500)' }}>Loading map...</p>
+            </div>
+          )}
           {isMobile && selected && (
-            <div style={{ position:'absolute', bottom:16, left:'50%', transform:'translateX(-50%)', zIndex:1000 }}>
-              <button onClick={()=>setMobileView('list')} style={{ background:'var(--navy)', color:'white', border:'none', borderRadius:100, padding:'10px 20px', fontSize:13, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 16px rgba(0,0,0,.2)' }}>
+            <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 1000 }}>
+              <button onClick={() => setMobileView('list')} style={{ background: 'var(--navy)', color: 'white', border: 'none', borderRadius: 100, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,.2)' }}>
                 View {selected.profiles?.name?.split(' ')[0]} →
               </button>
             </div>
