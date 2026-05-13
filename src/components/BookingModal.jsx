@@ -5,12 +5,13 @@ import { createBooking } from '../lib/db';
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 
 export default function BookingModal({ onClose, onSuccess, providers, userId }) {
-  const [step, setStep]   = useState(1);
-  const [form, setForm]   = useState({ service: '', date: '', time: '', zip: '', notes: '' });
+  const [step,      setStep]      = useState(1);
+  const [form,      setForm]      = useState({ service: '', date: '', time: '', zip: '', notes: '' });
   const [suggested, setSuggested] = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [aiTip, setAiTip]         = useState('');
+  const [loading,   setLoading]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [aiTip,     setAiTip]     = useState('');
+  const [confirmed, setConfirmed] = useState(null); // holds the completed booking + provider
 
   const u = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const today = new Date().toISOString().split('T')[0];
@@ -51,39 +52,61 @@ export default function BookingModal({ onClose, onSuccess, providers, userId }) 
     setSaving(true);
     const price = Math.floor(50 + Math.random() * 60);
     const { data, error } = await createBooking({
-      customerId:  userId,
-      providerId:  provider ? provider.id : null,
-      service:     form.service,
-      date:        form.date,
-      time:        form.time,
-      zip:         form.zip,
-      notes:       form.notes,
+      customerId: userId,
+      providerId: provider ? provider.id : null,
+      service:    form.service,
+      date:       form.date,
+      time:       form.time,
+      zip:        form.zip,
+      notes:      form.notes,
       price,
     });
     setSaving(false);
     if (error) { alert('Error creating booking: ' + error.message); return; }
+    // Show confirmation screen instead of closing immediately
+    setConfirmed({ booking: data, provider });
+    setStep(4);
     onSuccess(data);
-    onClose();
+  };
+
+  const formatDate = (d) => {
+    if (!d) return '';
+    const date = new Date(d + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatTime = (t) => {
+    if (!t) return '';
+    const [h, m] = t.split(':');
+    const hour = parseInt(h);
+    return `${hour > 12 ? hour - 12 : hour || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
   };
 
   return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && step !== 4) onClose(); }}>
       <div className="modal">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <h2 style={{ fontSize: 20, color: 'var(--navy)' }}>Book a Service</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8' }}>✕</button>
-        </div>
 
-        {/* Steps */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
-          {['Details', 'Date & Time', 'Confirm'].map((label, i) => (
-            <div key={i} style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ height: 4, borderRadius: 4, marginBottom: 6, background: step > i+1 ? 'var(--green)' : step === i+1 ? 'var(--navy)' : 'var(--gray-200)' }} />
-              <span style={{ fontSize: 11, color: step === i+1 ? 'var(--navy)' : 'var(--gray-400)', fontWeight: 500 }}>{label}</span>
-            </div>
-          ))}
-        </div>
+        {/* Header — hide on confirmation */}
+        {step !== 4 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <h2 style={{ fontSize: 20, color: 'var(--navy)' }}>Book a Service</h2>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+          </div>
+        )}
 
+        {/* Progress bar — hide on confirmation */}
+        {step !== 4 && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
+            {['Details', 'Date & Time', 'Confirm'].map((label, i) => (
+              <div key={i} style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ height: 4, borderRadius: 4, marginBottom: 6, background: step > i+1 ? 'var(--green)' : step === i+1 ? 'var(--navy)' : 'var(--gray-200)' }} />
+                <span style={{ fontSize: 11, color: step === i+1 ? 'var(--navy)' : 'var(--gray-400)', fontWeight: 500 }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* STEP 1 — Details */}
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
@@ -110,6 +133,7 @@ export default function BookingModal({ onClose, onSuccess, providers, userId }) 
           </div>
         )}
 
+        {/* STEP 2 — Date & Time */}
         {step === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="card" style={{ padding: 16, background: 'var(--gray-50)' }}>
@@ -128,6 +152,7 @@ export default function BookingModal({ onClose, onSuccess, providers, userId }) 
           </div>
         )}
 
+        {/* STEP 3 — Provider selection */}
         {step === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {aiTip && (
@@ -160,6 +185,80 @@ export default function BookingModal({ onClose, onSuccess, providers, userId }) 
             <button style={{ background: 'none', border: 'none', color: 'var(--gray-500)', cursor: 'pointer', fontSize: 14 }} onClick={() => setStep(2)}>← Back</button>
           </div>
         )}
+
+        {/* STEP 4 — Confirmation screen */}
+        {step === 4 && confirmed && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '8px 0 16px' }}>
+
+            {/* Big green checkmark */}
+            <div style={{
+              width: 80, height: 80, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 36, marginBottom: 20,
+              boxShadow: '0 8px 32px rgba(34,197,94,0.35)'
+            }}>✓</div>
+
+            <h2 style={{ fontSize: 22, color: 'var(--navy)', marginBottom: 8, fontFamily: 'Sora, sans-serif' }}>
+              {confirmed.provider ? "You're booked!" : "Request posted!"}
+            </h2>
+            <p style={{ color: 'var(--gray-500)', fontSize: 14, marginBottom: 28, maxWidth: 300, lineHeight: 1.6 }}>
+              {confirmed.provider
+                ? `Your booking with ${confirmed.provider.profiles?.name} has been confirmed.`
+                : 'Your open request is live. Providers in your area will see it and can accept it.'}
+            </p>
+
+            {/* Booking summary card */}
+            <div style={{
+              width: '100%', background: 'var(--gray-50)', borderRadius: 16,
+              border: '1px solid var(--gray-200)', padding: 20, marginBottom: 24, textAlign: 'left'
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', letterSpacing: '0.08em', marginBottom: 14, textTransform: 'uppercase' }}>
+                Booking Summary
+              </div>
+
+              {[
+                ['Service',  form.service],
+                ['Date',     formatDate(form.date)],
+                ['Time',     formatTime(form.time)],
+                ['Location', `📍 ${form.zip}`],
+                ...(confirmed.provider ? [['Provider', confirmed.provider.profiles?.name]] : []),
+                ...(form.notes ? [['Notes', form.notes]] : []),
+              ].map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12 }}>
+                  <span style={{ fontSize: 13, color: 'var(--gray-400)', flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontSize: 13, color: 'var(--navy)', fontWeight: 500, textAlign: 'right' }}>{value}</span>
+                </div>
+              ))}
+
+              <div style={{ borderTop: '1px solid var(--gray-200)', marginTop: 4, paddingTop: 12, display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>Status</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: confirmed.provider ? '#f59e0b' : '#3b82f6' }}>
+                  {confirmed.provider ? '⏳ Pending Acceptance' : '🔍 Open Request'}
+                </span>
+              </div>
+            </div>
+
+            {/* What happens next */}
+            <div style={{ width: '100%', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#166534', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>What happens next</div>
+              {(confirmed.provider
+                ? ['The provider will review and accept your booking', 'You\'ll get notified when they confirm', 'Chat with them in Messages with any questions']
+                : ['Providers near you will see your request', 'One will accept and you\'ll be notified', 'Check My Bookings to track the status']
+              ).map((step, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: i < 2 ? 8 : 0 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'white', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{i + 1}</div>
+                  <span style={{ fontSize: 13, color: '#166534', lineHeight: 1.5 }}>{step}</span>
+                </div>
+              ))}
+            </div>
+
+            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: 15, padding: '13px' }} onClick={onClose}>
+              View My Bookings
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );
