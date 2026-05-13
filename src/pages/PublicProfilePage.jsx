@@ -15,8 +15,8 @@ function Stars({ rating, size = 14 }) {
 }
 
 function AvatarOrPhoto({ provider, size = 80 }) {
-  const name = provider?.profiles?.name || 'P';
-  const url  = provider?.profiles?.avatar_url || provider?.avatar_url;
+  const name     = provider?.profiles?.name || 'P';
+  const url      = provider?.profiles?.avatar_url || provider?.avatar_url;
   const initials = name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
   if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />;
   return (
@@ -54,8 +54,16 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
     </div>
   );
 
-  const avail = provider.availability || {};
-  const memberSince = provider.profiles?.created_at ? new Date(provider.profiles.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' }) : null;
+  const avail       = provider.availability || {};
+  const memberSince = provider.profiles?.created_at
+    ? new Date(provider.profiles.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+    : null;
+
+  // Always compute from the live reviews array so it's never stale
+  const liveReviewCount = reviews.length;
+  const liveRating      = reviews.length
+    ? Math.round((reviews.reduce((a, r) => a + r.rating, 0) / reviews.length) * 10) / 10
+    : 0;
 
   return (
     <div>
@@ -70,38 +78,31 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
       <div style={{ background: 'linear-gradient(135deg, var(--navy-dark) 0%, var(--navy) 100%)', padding: '40px 24px 80px' }} />
 
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 24px' }}>
-        {/* Profile card - overlapping hero */}
+
+        {/* Profile card */}
         <div className="card" style={{ marginTop: -60, marginBottom: 24, display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
             <AvatarOrPhoto provider={provider} size={90} />
-            <div style={{
-              position: 'absolute', bottom: 4, right: 4,
-              width: 16, height: 16, borderRadius: '50%',
-              background: provider.available ? 'var(--green)' : 'var(--gray-400)',
-              border: '2px solid white',
-            }} />
+            <div style={{ position: 'absolute', bottom: 4, right: 4, width: 16, height: 16, borderRadius: '50%', background: provider.available ? 'var(--green)' : 'var(--gray-400)', border: '2px solid white' }} />
           </div>
+
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h1 style={{ fontSize: 26, color: 'var(--navy)', fontFamily: 'Sora', fontWeight: 700 }}>
-                  {provider.profiles?.name}
-                </h1>
+                <h1 style={{ fontSize: 26, color: 'var(--navy)', fontFamily: 'Sora', fontWeight: 700 }}>{provider.profiles?.name}</h1>
                 <p style={{ fontSize: 15, color: 'var(--gray-600)', marginTop: 2 }}>{provider.headline}</p>
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <span className={`badge ${provider.available ? 'badge-green' : 'badge-gray'}`}>
-                  {provider.available ? '● Online' : '○ Offline'}
-                </span>
-              </div>
+              <span className={`badge ${provider.available ? 'badge-green' : 'badge-gray'}`}>
+                {provider.available ? '● Online' : '○ Offline'}
+              </span>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginTop: 12 }}>
-              {provider.rating > 0 && (
+              {liveRating > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Stars rating={provider.rating} />
-                  <span style={{ fontSize: 14, color: 'var(--gray-600)', fontWeight: 500 }}>{provider.rating}</span>
-                  <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>({provider.review_count} reviews)</span>
+                  <Stars rating={liveRating} />
+                  <span style={{ fontSize: 14, color: 'var(--gray-600)', fontWeight: 500 }}>{liveRating}</span>
+                  <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>({liveReviewCount} review{liveReviewCount !== 1 ? 's' : ''})</span>
                 </div>
               )}
               {provider.job_count > 0 && <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>✅ {provider.job_count} jobs done</span>}
@@ -152,8 +153,8 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
                   {provider.portfolio_urls.map((url, i) => (
                     <div key={i} onClick={() => setImgModal(url)} style={{ cursor: 'pointer', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: 'var(--gray-100)' }}>
                       <img src={url} alt={`Portfolio ${i+1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .2s' }}
-                        onMouseOver={e => e.target.style.transform='scale(1.05)'}
-                        onMouseOut={e => e.target.style.transform='scale(1)'}
+                        onMouseOver={e => e.target.style.transform = 'scale(1.05)'}
+                        onMouseOut={e => e.target.style.transform = 'scale(1)'}
                       />
                     </div>
                   ))}
@@ -176,17 +177,18 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
               </div>
             )}
 
-            {/* Reviews */}
+            {/* Reviews — count and rating from live array */}
             <div className="card" style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ fontSize: 16, color: 'var(--navy)' }}>Reviews ({reviews.length})</h3>
-                {provider.rating > 0 && (
+                <h3 style={{ fontSize: 16, color: 'var(--navy)' }}>Reviews ({liveReviewCount})</h3>
+                {liveRating > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Stars rating={provider.rating} size={16} />
-                    <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{provider.rating}</span>
+                    <Stars rating={liveRating} size={16} />
+                    <span style={{ fontWeight: 700, color: 'var(--navy)' }}>{liveRating}</span>
                   </div>
                 )}
               </div>
+
               {reviews.length === 0 ? (
                 <p style={{ color: 'var(--gray-400)', fontSize: 14 }}>No reviews yet — be the first to book and leave a review!</p>
               ) : (
@@ -196,7 +198,7 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>
-                            {(r.profiles?.name || 'A').split(' ').map(w=>w[0]).join('').slice(0,2)}
+                            {(r.profiles?.name || 'A').split(' ').map(w => w[0]).join('').slice(0,2)}
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--navy)' }}>{r.profiles?.name || 'Anonymous'}</div>
@@ -222,10 +224,7 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
                 {DAYS.map(d => (
                   <div key={d} style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 10, color: 'var(--gray-400)', marginBottom: 4 }}>{DAY_LABELS[d]}</div>
-                    <div style={{
-                      width: '100%', paddingBottom: '100%', borderRadius: 8, position: 'relative',
-                      background: avail[d] ? 'var(--green)' : 'var(--gray-100)',
-                    }}>
+                    <div style={{ width: '100%', paddingBottom: '100%', borderRadius: 8, position: 'relative', background: avail[d] ? 'var(--green)' : 'var(--gray-100)' }}>
                       <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: avail[d] ? 'white' : 'var(--gray-300)' }}>
                         {avail[d] ? '✓' : '✕'}
                       </span>
@@ -245,13 +244,13 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
               </div>
             )}
 
-            {/* Quick stats */}
+            {/* Quick Stats — all from live reviews array */}
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ fontSize: 15, color: 'var(--navy)', marginBottom: 12 }}>Quick Stats</h3>
               {[
                 ['Jobs Completed', provider.job_count || 0],
-                ['Reviews',        provider.review_count || 0],
-                ['Rating',         provider.rating ? provider.rating + ' / 5.0' : 'No ratings yet'],
+                ['Reviews',        liveReviewCount],
+                ['Rating',         liveRating > 0 ? `${liveRating} / 5.0` : 'No ratings yet'],
                 ['Response Time',  provider.response_time || 'Within a few hours'],
               ].map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--gray-100)' }}>
@@ -268,7 +267,7 @@ export default function PublicProfilePage({ providerId, onBook, onBack }) {
         </div>
       </div>
 
-      {/* Image modal */}
+      {/* Image lightbox */}
       {imgModal && (
         <div onClick={() => setImgModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
           <img src={imgModal} alt="Portfolio" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 12, objectFit: 'contain' }} />
