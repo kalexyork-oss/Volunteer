@@ -97,18 +97,46 @@ export async function getProviderReviews(providerId) {
   return { data, error };
 }
 
+// Returns all reviews the user has submitted — used to hide "Leave a Review" button
+export async function getMyReviews(userId) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('booking_id')
+    .eq('reviewer_id', userId);
+  return { data, error };
+}
+
 export async function submitReview({ bookingId, reviewerId, providerId, rating, body }) {
+  // Check for duplicate first
+  const { data: existing } = await supabase
+    .from('reviews')
+    .select('id')
+    .eq('booking_id', bookingId)
+    .eq('reviewer_id', reviewerId)
+    .maybeSingle();
+
+  if (existing) {
+    return { data: existing, error: { message: 'You have already reviewed this booking.' } };
+  }
+
   const { data, error } = await supabase
     .from('reviews')
     .insert({ booking_id: bookingId, reviewer_id: reviewerId, provider_id: providerId, rating, body })
     .select()
     .single();
+
   if (!error) {
-    // Update provider rating average
-    const { data: reviews } = await supabase.from('reviews').select('rating').eq('provider_id', providerId);
+    // Recalculate provider rating average
+    const { data: reviews } = await supabase
+      .from('reviews')
+      .select('rating')
+      .eq('provider_id', providerId);
     if (reviews?.length) {
       const avg = reviews.reduce((a, r) => a + r.rating, 0) / reviews.length;
-      await supabase.from('providers').update({ rating: Math.round(avg * 10) / 10, review_count: reviews.length }).eq('id', providerId);
+      await supabase
+        .from('providers')
+        .update({ rating: Math.round(avg * 10) / 10, review_count: reviews.length })
+        .eq('id', providerId);
     }
   }
   return { data, error };
@@ -119,11 +147,14 @@ export async function createBooking({ customerId, providerId, service, date, tim
   const { data, error } = await supabase
     .from('bookings')
     .insert({
-      customer_id: customerId, provider_id: providerId || null,
-      service, date, time, zip, notes, price: price || null,
-      status: providerId ? 'Accepted' : 'Pending',
+      customer_id: customerId,
+      provider_id: providerId || null,
+      service, date, time, zip, notes,
+      price: price || null,
+      status: 'Pending', // Always Pending — provider must manually accept
     })
-    .select().single();
+    .select()
+    .single();
   return { data, error };
 }
 
@@ -158,7 +189,9 @@ export async function acceptBooking(bookingId, providerId) {
   const { data, error } = await supabase
     .from('bookings')
     .update({ provider_id: providerId, status: 'Accepted' })
-    .eq('id', bookingId).select().single();
+    .eq('id', bookingId)
+    .select()
+    .single();
   return { data, error };
 }
 
@@ -166,7 +199,9 @@ export async function updateBookingStatus(bookingId, status) {
   const { data, error } = await supabase
     .from('bookings')
     .update({ status })
-    .eq('id', bookingId).select().single();
+    .eq('id', bookingId)
+    .select()
+    .single();
   return { data, error };
 }
 

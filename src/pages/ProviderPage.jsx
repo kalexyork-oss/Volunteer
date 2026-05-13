@@ -70,53 +70,40 @@ function BookingCalendar({ bookings, vacationStart, vacationEnd }) {
   };
 
   const STATUS_COLORS = { Accepted: '#3b82f6', Pending: '#f59e0b', Completed: '#22c55e', Cancelled: '#ef4444' };
-
   const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
     <div>
-      {/* Month nav */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>‹</button>
         <span style={{ fontWeight: 600, color: 'var(--navy)', fontFamily: 'Sora' }}>{monthName}</span>
         <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>›</button>
       </div>
 
-      {/* Day headers */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
         {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
           <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--gray-400)', padding: '4px 0' }}>{d}</div>
         ))}
       </div>
 
-      {/* Days grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-        {/* Empty cells before first day */}
         {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
-
-        {/* Days */}
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-          const ds       = dateStr(day);
+          const ds          = dateStr(day);
           const dayBookings = bookingsByDate[ds] || [];
-          const vacation = isVacation(day);
-          const today    = isToday(day);
-
+          const vacation    = isVacation(day);
+          const today       = isToday(day);
           return (
             <div key={day} style={{
               minHeight: 52, borderRadius: 8, padding: '4px 6px',
               background: vacation ? '#fef9c3' : today ? '#f0f4ff' : dayBookings.length > 0 ? '#f0fdf4' : 'var(--gray-50)',
               border: `1px solid ${today ? 'var(--navy)' : vacation ? '#fde047' : 'var(--gray-200)'}`,
-              position: 'relative',
             }}>
               <div style={{ fontSize: 12, fontWeight: today ? 700 : 400, color: today ? 'var(--navy)' : 'var(--gray-700)' }}>{day}</div>
               {vacation && <div style={{ fontSize: 9, color: '#854d0e' }}>🏖️</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 2 }}>
                 {dayBookings.slice(0, 2).map((b, i) => (
-                  <div key={i} style={{
-                    fontSize: 9, padding: '1px 4px', borderRadius: 3,
-                    background: STATUS_COLORS[b.status] || '#94a3b8',
-                    color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
+                  <div key={i} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, background: STATUS_COLORS[b.status] || '#94a3b8', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {b.service?.split(' ')[0]}
                   </div>
                 ))}
@@ -127,7 +114,6 @@ function BookingCalendar({ bookings, vacationStart, vacationEnd }) {
         })}
       </div>
 
-      {/* Legend */}
       <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
         {[['#3b82f6','Accepted'],['#f59e0b','Pending'],['#22c55e','Completed'],['#fde047','Vacation']].map(([color, label]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--gray-500)' }}>
@@ -141,7 +127,7 @@ function BookingCalendar({ bookings, vacationStart, vacationEnd }) {
 }
 
 // ---- Main ProviderPage ----
-export default function ProviderPage({ userId, profile, providerProfile, onPost, onRefresh }) {
+export default function ProviderPage({ userId, profile, providerProfile, onPost, onRefresh, onJobAccepted, onJobCompleted }) {
   const [tab,       setTab]       = useState('available');
   const [available, setAvailable] = useState([]);
   const [myJobs,    setMyJobs]    = useState([]);
@@ -150,13 +136,11 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
   const [toggling,  setToggling]  = useState(false);
   const [acting,    setActing]    = useState(null);
 
-  // Vacation settings
-  const [vacStart,    setVacStart]    = useState(providerProfile?.vacation_start || '');
-  const [vacEnd,      setVacEnd]      = useState(providerProfile?.vacation_end || '');
-  const [savingVac,   setSavingVac]   = useState(false);
-  const [vacSaved,    setVacSaved]    = useState(false);
+  const [vacStart,  setVacStart]  = useState(providerProfile?.vacation_start || '');
+  const [vacEnd,    setVacEnd]    = useState(providerProfile?.vacation_end || '');
+  const [savingVac, setSavingVac] = useState(false);
+  const [vacSaved,  setVacSaved]  = useState(false);
 
-  // Auto-reply
   const [autoReply,        setAutoReply]        = useState(providerProfile?.auto_reply || '');
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(providerProfile?.auto_reply_enabled || false);
   const [savingReply,      setSavingReply]       = useState(false);
@@ -188,10 +172,12 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
 
   const handleAccept = async (bookingId) => {
     setActing(bookingId);
-    await acceptBooking(bookingId, userId);
+    const { data } = await acceptBooking(bookingId, userId);
     setActing(null);
     load();
     if (onRefresh) onRefresh();
+    // Fire notification to customer
+    if (onJobAccepted && data) onJobAccepted(data);
   };
 
   const handleDecline = async (bookingId) => {
@@ -204,10 +190,12 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
 
   const handleComplete = async (bookingId) => {
     setActing(bookingId);
-    await updateBookingStatus(bookingId, 'Completed');
+    const { data } = await updateBookingStatus(bookingId, 'Completed');
     if (userId) await supabase.from('providers').update({ job_count: (providerProfile?.job_count || 0) + 1 }).eq('id', userId);
     setActing(null);
     load();
+    // Fire notification to customer
+    if (onJobCompleted && data) onJobCompleted(data);
   };
 
   const saveVacation = async () => {
@@ -236,7 +224,6 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
   const activeJobs    = myJobs.filter(b => b.status === 'Accepted');
   const completedJobs = myJobs.filter(b => b.status === 'Completed');
 
-  // ---- EARNINGS DATA ----
   const earningsData = useMemo(() => {
     const now    = new Date();
     const months = Array.from({ length: 6 }, (_, i) => {
@@ -245,7 +232,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
     });
     completedJobs.forEach(b => {
       if (!b.created_at || !b.price) return;
-      const d = new Date(b.created_at);
+      const d    = new Date(b.created_at);
       const slot = months.find(m => m.month === d.getMonth() && m.year === d.getFullYear());
       if (slot) slot.value += b.price;
     });
@@ -260,18 +247,16 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
     });
     completedJobs.forEach(b => {
       if (!b.created_at) return;
-      const d = new Date(b.created_at);
+      const d    = new Date(b.created_at);
       const slot = months.find(m => m.month === d.getMonth() && m.year === d.getFullYear());
       if (slot) slot.value += 1;
     });
     return months;
   }, [completedJobs]);
 
-  const totalEarnings  = completedJobs.reduce((a, b) => a + (b.price || 0), 0);
-  const avgJobValue    = completedJobs.length ? (totalEarnings / completedJobs.length).toFixed(0) : 0;
-  const thisMonthJobs  = completedJobs.filter(b => b.created_at && new Date(b.created_at).getMonth() === new Date().getMonth()).length;
-
-  const isOnVacation = vacStart && vacEnd && new Date() >= new Date(vacStart) && new Date() <= new Date(vacEnd);
+  const totalEarnings = completedJobs.reduce((a, b) => a + (b.price || 0), 0);
+  const avgJobValue   = completedJobs.length ? (totalEarnings / completedJobs.length).toFixed(0) : 0;
+  const isOnVacation  = vacStart && vacEnd && new Date() >= new Date(vacStart) && new Date() <= new Date(vacEnd);
 
   const TABS = [
     ['available', 'Available Jobs'],
@@ -304,7 +289,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
         </div>
       </div>
 
-      {/* Vacation / offline banners */}
+      {/* Vacation banner */}
       {isOnVacation && (
         <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 12, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 20 }}>🏖️</span>
@@ -316,6 +301,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
         </div>
       )}
 
+      {/* Offline banner */}
       {providerProfile && !online && !isOnVacation && (
         <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 12, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 20 }}>😴</span>
@@ -330,10 +316,10 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
       {/* Stats */}
       <div className="grid-4" style={{ marginBottom: 28 }}>
         {[
-          ['Open Jobs',   available.length,                '📋'],
-          ['Active',      activeJobs.length,               '✅'],
-          ['Completed',   completedJobs.length,            '🏆'],
-          ['Earnings',    `$${totalEarnings.toFixed(0)}`,  '💰'],
+          ['Open Jobs',  available.length,               '📋'],
+          ['Active',     activeJobs.length,              '✅'],
+          ['Completed',  completedJobs.length,           '🏆'],
+          ['Earnings',   `$${totalEarnings.toFixed(0)}`, '💰'],
         ].map(([label, value, icon]) => (
           <div key={label} style={{ background: 'var(--navy)', borderRadius: 14, padding: '18px 20px', textAlign: 'center' }}>
             <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>
@@ -357,7 +343,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
 
       {loading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--gray-500)' }}>Loading...</div>}
 
-      {/* ---- AVAILABLE ---- */}
+      {/* AVAILABLE JOBS */}
       {!loading && tab === 'available' && (
         <div>
           {available.length === 0 ? (
@@ -369,14 +355,23 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
                 <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 2 }}>📅 {b.date} at {b.time} · 📍 {b.zip}</div>
                 {b.notes && <div style={{ fontSize: 13, color: 'var(--gray-600)', marginTop: 4 }}>"{b.notes}"</div>}
               </div>
-              {b.price && <div style={{ textAlign: 'center' }}><div style={{ fontWeight: 700, fontSize: 20, color: 'var(--green)' }}>${b.price}</div><div style={{ fontSize: 11, color: 'var(--gray-400)' }}>est.</div></div>}
-              {userId && <button className="btn-primary btn-sm" onClick={() => handleAccept(b.id)} disabled={acting === b.id}>{acting === b.id ? '...' : 'Accept ✓'}</button>}
+              {b.price && (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--green)' }}>${b.price}</div>
+                  <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>est.</div>
+                </div>
+              )}
+              {userId && (
+                <button className="btn-primary btn-sm" onClick={() => handleAccept(b.id)} disabled={acting === b.id}>
+                  {acting === b.id ? '...' : 'Accept ✓'}
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* ---- ACTIVE JOBS ---- */}
+      {/* MY JOBS (active) */}
       {!loading && tab === 'active' && (
         <div>
           {activeJobs.length === 0 ? (
@@ -407,22 +402,21 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
         </div>
       )}
 
-      {/* ---- CALENDAR ---- */}
+      {/* CALENDAR */}
       {!loading && tab === 'calendar' && (
         <div className="card">
           <BookingCalendar bookings={myJobs} vacationStart={vacStart} vacationEnd={vacEnd} />
         </div>
       )}
 
-      {/* ---- EARNINGS ---- */}
+      {/* EARNINGS */}
       {!loading && tab === 'earnings' && (
         <div>
-          {/* Summary cards */}
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
-              ['Total Earnings',   `$${totalEarnings.toFixed(0)}`, '#22c55e'],
-              ['Jobs Completed',   completedJobs.length,           '#3b82f6'],
-              ['Avg Job Value',    `$${avgJobValue}`,              '#f59e0b'],
+              ['Total Earnings', `$${totalEarnings.toFixed(0)}`, '#22c55e'],
+              ['Jobs Completed', completedJobs.length,           '#3b82f6'],
+              ['Avg Job Value',  `$${avgJobValue}`,              '#f59e0b'],
             ].map(([label, value, color]) => (
               <div key={label} style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: 14, padding: 20, borderTop: `4px solid ${color}` }}>
                 <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 6 }}>{label}</div>
@@ -430,18 +424,10 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
               </div>
             ))}
           </div>
-
-          {/* Charts */}
           <div className="grid-2">
-            <div className="card">
-              <BarChart data={earningsData} label="Monthly Earnings ($)" color="#22c55e" />
-            </div>
-            <div className="card">
-              <BarChart data={jobsData} label="Jobs Completed" color="#3b82f6" />
-            </div>
+            <div className="card"><BarChart data={earningsData} label="Monthly Earnings ($)" color="#22c55e" /></div>
+            <div className="card"><BarChart data={jobsData} label="Jobs Completed" color="#3b82f6" /></div>
           </div>
-
-          {/* Recent completed jobs */}
           <div className="card" style={{ marginTop: 20 }}>
             <h3 style={{ fontSize: 16, color: 'var(--gray-800)', marginBottom: 16 }}>Recent Completed Jobs</h3>
             {completedJobs.length === 0 ? (
@@ -459,10 +445,9 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
         </div>
       )}
 
-      {/* ---- TOOLS ---- */}
+      {/* TOOLS */}
       {!loading && tab === 'tools' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
           {/* Vacation Mode */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -492,9 +477,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
                 {savingVac ? 'Saving...' : vacSaved ? '✓ Saved!' : 'Save Dates'}
               </button>
               {(vacStart || vacEnd) && (
-                <button onClick={clearVacation} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--gray-600)' }}>
-                  Clear
-                </button>
+                <button onClick={clearVacation} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--gray-600)' }}>Clear</button>
               )}
             </div>
           </div>
@@ -505,44 +488,31 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
               <div style={{ width: 36, height: 36, background: '#f0fdf4', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>💬</div>
               <div>
                 <h3 style={{ fontSize: 16, color: 'var(--gray-800)' }}>Auto-Reply Message</h3>
-                <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Sent automatically when someone messages you while you're offline</p>
+                <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Sent when someone messages you while offline</p>
               </div>
             </div>
-
-            {/* Enable toggle */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-700)' }}>Enable auto-reply</span>
               <div onClick={() => setAutoReplyEnabled(e => !e)} style={{ width: 44, height: 24, borderRadius: 100, background: autoReplyEnabled ? 'var(--green)' : 'var(--gray-300)', cursor: 'pointer', position: 'relative', transition: 'background .3s' }}>
                 <div style={{ position: 'absolute', top: 3, left: autoReplyEnabled ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left .25s' }} />
               </div>
             </div>
-
             <div style={{ marginBottom: 14 }}>
               <label>Message</label>
-              <textarea
-                rows={3} style={{ resize: 'none' }}
-                placeholder="e.g. Thanks for reaching out! I'm currently offline but will get back to you within a few hours."
-                value={autoReply}
-                onChange={e => setAutoReply(e.target.value)}
-              />
+              <textarea rows={3} style={{ resize: 'none' }} placeholder="e.g. Thanks for reaching out! I'll get back to you within a few hours." value={autoReply} onChange={e => setAutoReply(e.target.value)} />
               <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 4 }}>Quick suggestions:</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                {[
-                  "Thanks! I'll respond within a few hours.",
-                  "Currently unavailable — back tomorrow!",
-                  "On vacation, back on [date]. Will reply then!",
-                ].map(s => (
+                {["Thanks! I'll respond within a few hours.", "Currently unavailable — back tomorrow!", "On vacation, back on [date]. Will reply then!"].map(s => (
                   <span key={s} onClick={() => setAutoReply(s)} style={{ fontSize: 12, padding: '4px 10px', background: 'var(--gray-100)', borderRadius: 100, cursor: 'pointer', color: 'var(--gray-600)' }}>{s}</span>
                 ))}
               </div>
             </div>
-
             <button className="btn-primary btn-sm" onClick={saveAutoReply} disabled={savingReply}>
               {savingReply ? 'Saving...' : replySaved ? '✓ Saved!' : 'Save Auto-Reply'}
             </button>
           </div>
 
-          {/* Service Area Map */}
+          {/* Service Area */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{ width: 36, height: 36, background: '#eff6ff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📍</div>
@@ -569,9 +539,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
                     </div>
                   )}
                 </div>
-                <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>
-                  To update your service area, edit your profile and change the zip code or radius slider.
-                </p>
+                <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>To update your service area, edit your profile and change the zip code or radius.</p>
                 <button className="btn-outline btn-sm" onClick={onPost} style={{ marginTop: 10 }}>Edit Service Area</button>
               </div>
             ) : (
@@ -584,7 +552,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
         </div>
       )}
 
-      {/* ---- PROFILE ---- */}
+      {/* PROFILE */}
       {tab === 'profile' && (
         <div className="card">
           {providerProfile ? (

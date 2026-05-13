@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getMyBookings, updateBookingStatus, submitReview } from '../lib/db';
+import { getMyBookings, updateBookingStatus, submitReview, getMyReviews } from '../lib/db';
 
 function StatusBadge({ status }) {
   const map = { Pending: 'badge-yellow', Accepted: 'badge-blue', Completed: 'badge-green', Cancelled: 'badge-red' };
@@ -17,9 +17,7 @@ function StarPicker({ value, onChange }) {
           onMouseEnter={() => setHover(i)}
           onMouseLeave={() => setHover(0)}
           style={{ fontSize: 28, cursor: 'pointer', color: i <= (hover || value) ? '#f59e0b' : '#e2e8f0', transition: 'color .1s' }}
-        >
-          ★
-        </span>
+        >★</span>
       ))}
     </div>
   );
@@ -83,7 +81,11 @@ function ReviewModal({ booking, userId, onClose, onDone }) {
             />
           </div>
 
-          {error && <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991b1b' }}>{error}</div>}
+          {error && (
+            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991b1b' }}>
+              {error}
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-outline" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
@@ -98,16 +100,22 @@ function ReviewModal({ booking, userId, onClose, onDone }) {
 }
 
 export default function CustomerPage({ userId, onBook, onOpenChat }) {
-  const [bookings,      setBookings]      = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [reviewBooking, setReviewBooking] = useState(null);
-  const [filter,        setFilter]        = useState('all');
-  const [cancelling,    setCancelling]    = useState(null);
+  const [bookings,       setBookings]       = useState([]);
+  const [reviewedIds,    setReviewedIds]    = useState(new Set()); // booking IDs already reviewed
+  const [loading,        setLoading]        = useState(true);
+  const [reviewBooking,  setReviewBooking]  = useState(null);
+  const [filter,         setFilter]         = useState('all');
+  const [cancelling,     setCancelling]     = useState(null);
 
   const load = async () => {
     if (!userId) return;
-    const { data } = await getMyBookings(userId);
-    setBookings(data || []);
+    const [{ data: b }, { data: r }] = await Promise.all([
+      getMyBookings(userId),
+      getMyReviews(userId),
+    ]);
+    setBookings(b || []);
+    // Build a set of booking IDs the user has already reviewed
+    setReviewedIds(new Set((r || []).map(rev => rev.booking_id)));
     setLoading(false);
   };
 
@@ -121,9 +129,12 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
     load();
   };
 
-  const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status.toLowerCase() === filter);
+  const handleReviewDone = () => {
+    load(); // reload so the button disappears
+  };
 
-  const FILTERS = [['all','All'],['pending','Pending'],['accepted','Accepted'],['completed','Completed'],['cancelled','Cancelled']];
+  const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status.toLowerCase() === filter);
+  const FILTERS  = [['all','All'],['pending','Pending'],['accepted','Accepted'],['completed','Completed'],['cancelled','Cancelled']];
 
   if (loading) return (
     <div className="section" style={{ textAlign: 'center', paddingTop: 80 }}>
@@ -151,7 +162,11 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
             color: filter === k ? 'white' : 'var(--gray-600)',
           }}>
             {l}
-            {k !== 'all' && <span style={{ marginLeft: 6, opacity: .7 }}>({bookings.filter(b => b.status.toLowerCase() === k).length})</span>}
+            {k !== 'all' && (
+              <span style={{ marginLeft: 6, opacity: .7 }}>
+                ({bookings.filter(b => b.status.toLowerCase() === k).length})
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -187,12 +202,20 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
               )}
 
               {!b.provider_id && b.status === 'Pending' && (
-                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--gold)' }}>⏳ Waiting for a provider to accept...</div>
+                <div style={{ marginTop: 8, fontSize: 13, color: '#92400e', background: '#fef9c3', padding: '6px 10px', borderRadius: 8, display: 'inline-block' }}>
+                  ⏳ Waiting for a provider to accept...
+                </div>
+              )}
+
+              {b.provider_id && b.status === 'Pending' && (
+                <div style={{ marginTop: 8, fontSize: 13, color: '#1d4ed8', background: '#eff6ff', padding: '6px 10px', borderRadius: 8, display: 'inline-block' }}>
+                  🔔 Request sent — waiting for provider to confirm
+                </div>
               )}
 
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                {/* Chat button — show when there's a provider */}
+                {/* Chat */}
                 {b.provider_id && b.status !== 'Cancelled' && onOpenChat && (
                   <button
                     onClick={() => onOpenChat({ booking: b, otherName: b.providers?.profiles?.name || 'Provider' })}
@@ -202,7 +225,7 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
                   </button>
                 )}
 
-                {/* Cancel button — only for Pending or Accepted */}
+                {/* Cancel */}
                 {(b.status === 'Pending' || b.status === 'Accepted') && (
                   <button
                     onClick={() => handleCancel(b.id)}
@@ -213,14 +236,21 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
                   </button>
                 )}
 
-                {/* Leave review — only for Completed, no review yet */}
-                {b.status === 'Completed' && b.provider_id && (
+                {/* Leave review — only Completed, has provider, NOT already reviewed */}
+                {b.status === 'Completed' && b.provider_id && !reviewedIds.has(b.id) && (
                   <button
                     onClick={() => setReviewBooking(b)}
                     style={{ background: 'none', border: '1.5px solid #fde68a', color: '#92400e', borderRadius: 8, padding: '6px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}
                   >
                     ⭐ Leave a Review
                   </button>
+                )}
+
+                {/* Already reviewed badge */}
+                {b.status === 'Completed' && b.provider_id && reviewedIds.has(b.id) && (
+                  <span style={{ fontSize: 13, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 14px', fontWeight: 500 }}>
+                    ✓ Review submitted
+                  </span>
                 )}
               </div>
             </div>
@@ -235,13 +265,12 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
         </div>
       ))}
 
-      {/* Review modal */}
       {reviewBooking && (
         <ReviewModal
           booking={reviewBooking}
           userId={userId}
           onClose={() => setReviewBooking(null)}
-          onDone={load}
+          onDone={handleReviewDone}
         />
       )}
     </div>
