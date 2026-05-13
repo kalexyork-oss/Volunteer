@@ -19,6 +19,7 @@ import SettingsPage      from './pages/SettingsPage';
 import PublicProfilePage from './pages/PublicProfilePage';
 import MessagesPage      from './pages/MessagesPage';
 import MapPage           from './pages/MapPage';
+import LegalPage         from './pages/LegalPage';
 
 export default function App() {
   const [page,            setPage]            = useState('home');
@@ -145,7 +146,7 @@ export default function App() {
         onBook={() => openBook()}
       />
 
-      {page === 'home'     && <LandingPage providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} onViewProfile={viewProfile} />}
+      {page === 'home'     && <LandingPage providers={providers} bookings={bookings} onBook={openBook} setPage={setPage} onViewProfile={viewProfile} onNavigate={setPage} />}
       {page === 'map'      && <MapPage providers={providers} onBook={openBook} onViewProfile={viewProfile} />}
       {page === 'customer' && <CustomerPage userId={user?.id} onBook={() => openBook()} onOpenChat={setActiveChat} />}
       {page === 'messages' && <MessagesPage currentUserId={user?.id} currentUserName={profile?.name} profile={profile} />}
@@ -161,6 +162,7 @@ export default function App() {
       {page === 'admin'    && <AdminPage />}
       {page === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} user={user} profile={profile} onProfileUpdate={p => setProfile(p)} />}
       {page === 'profile'  && <PublicProfilePage providerId={viewProfileId} onBook={openBook} onBack={() => setPage('home')} />}
+      {page === 'legal'    && <LegalPage />}
 
       {showAuth  && <AuthModal onClose={() => { setShowAuth(false); setAuthMode('signin'); }} onSuccess={() => showToast('Welcome!')} initialMode={authMode} />}
       {showBook  && <BookingModal onClose={() => { setShowBook(false); setBookProviderId(null); }} onSuccess={handleBookSuccess} providers={providers} userId={user?.id} preselectedProviderId={bookProviderId} />}

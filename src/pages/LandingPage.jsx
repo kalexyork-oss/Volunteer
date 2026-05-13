@@ -19,20 +19,18 @@ function ProviderAvatar({ provider, size = 48 }) {
   );
 }
 
-export default function LandingPage({ providers, bookings, onBook, setPage, onViewProfile }) {
+export default function LandingPage({ providers, bookings, onBook, setPage, onViewProfile, onNavigate }) {
   const [search,      setSearch]      = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterZip,   setFilterZip]   = useState('');
   const [filterMaxPrice, setFilterMaxPrice] = useState('');
   const [filterMinRating, setFilterMinRating] = useState(0);
-  const [sortBy,      setSortBy]      = useState('rating'); // 'rating' | 'price_low' | 'price_high' | 'reviews'
+  const [sortBy,      setSortBy]      = useState('rating');
 
   const onlineProviders = providers.filter(p => p.available !== false);
 
   const filtered = useMemo(() => {
     let list = onlineProviders;
-
-    // Text search
     if (search) {
       list = list.filter(p =>
         (p.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())) ||
@@ -40,23 +38,9 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
         (p.headline || '').toLowerCase().includes(search.toLowerCase())
       );
     }
-
-    // Zip filter
-    if (filterZip) {
-      list = list.filter(p => (p.zip || p.profiles?.zip || '').startsWith(filterZip));
-    }
-
-    // Max price filter
-    if (filterMaxPrice) {
-      list = list.filter(p => !p.hourly_rate || p.hourly_rate <= parseFloat(filterMaxPrice));
-    }
-
-    // Min rating filter
-    if (filterMinRating > 0) {
-      list = list.filter(p => !p.rating || p.rating >= filterMinRating);
-    }
-
-    // Sort
+    if (filterZip) list = list.filter(p => (p.zip || p.profiles?.zip || '').startsWith(filterZip));
+    if (filterMaxPrice) list = list.filter(p => !p.hourly_rate || p.hourly_rate <= parseFloat(filterMaxPrice));
+    if (filterMinRating > 0) list = list.filter(p => !p.rating || p.rating >= filterMinRating);
     list = [...list].sort((a, b) => {
       if (sortBy === 'rating')     return (b.rating || 0) - (a.rating || 0);
       if (sortBy === 'price_low')  return (a.hourly_rate || 999) - (b.hourly_rate || 999);
@@ -64,14 +48,12 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
       if (sortBy === 'reviews')    return (b.review_count || 0) - (a.review_count || 0);
       return 0;
     });
-
     return list;
   }, [onlineProviders, search, filterZip, filterMaxPrice, filterMinRating, sortBy]);
 
   const totalCompleted = (bookings || []).filter(b => b.status === 'Completed').length;
   const activeFilters  = [filterZip, filterMaxPrice, filterMinRating > 0].filter(Boolean).length;
-
-  const clearFilters = () => { setFilterZip(''); setFilterMaxPrice(''); setFilterMinRating(0); setSortBy('rating'); };
+  const clearFilters   = () => { setFilterZip(''); setFilterMaxPrice(''); setFilterMinRating(0); setSortBy('rating'); };
 
   return (
     <div>
@@ -112,7 +94,6 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
           <p style={{ color: 'var(--gray-500)' }}>Search and filter to find the perfect match</p>
         </div>
 
-        {/* Search bar */}
         <div style={{ maxWidth: 700, margin: '0 auto 16px', display: 'flex', gap: 10 }}>
           <div className="search-bar" style={{ flex: 1 }}>
             <span className="search-icon">🔍</span>
@@ -130,23 +111,17 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
           </button>
         </div>
 
-        {/* Filter panel */}
         {showFilters && (
           <div className="card" style={{ maxWidth: 700, margin: '0 auto 24px', padding: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-              {/* Zip filter */}
               <div>
                 <label>Zip Code</label>
                 <input type="text" placeholder="e.g. 29707" value={filterZip} onChange={e => setFilterZip(e.target.value)} maxLength={5} />
               </div>
-
-              {/* Max price */}
               <div>
                 <label>Max Price ($/hr)</label>
                 <input type="number" placeholder="e.g. 75" value={filterMaxPrice} onChange={e => setFilterMaxPrice(e.target.value)} min="0" />
               </div>
-
-              {/* Min rating */}
               <div>
                 <label>Minimum Rating</label>
                 <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
@@ -161,8 +136,6 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
                   ))}
                 </div>
               </div>
-
-              {/* Sort */}
               <div>
                 <label>Sort By</label>
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
@@ -173,7 +146,6 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
                 </select>
               </div>
             </div>
-
             {activeFilters > 0 && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--gray-200)', display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
@@ -184,14 +156,12 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
           </div>
         )}
 
-        {/* Tags */}
         {!search && (
           <div className="tag-cloud" style={{ justifyContent: 'center', marginBottom: 24 }}>
             {TAGS.slice(0, 14).map(t => <span key={t} className="tag" onClick={() => setSearch(t)}>{t}</span>)}
           </div>
         )}
 
-        {/* Results count */}
         {(search || activeFilters > 0) && (
           <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 14, color: 'var(--gray-500)' }}>
             {filtered.length} provider{filtered.length !== 1 ? 's' : ''} found
@@ -199,7 +169,6 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
           </div>
         )}
 
-        {/* Provider cards */}
         {filtered.length === 0 ? (
           <div className="empty-state">
             <div style={{ fontSize: 48, marginBottom: 8 }}>🔍</div>
@@ -288,6 +257,25 @@ export default function LandingPage({ providers, bookings, onBook, setPage, onVi
               <p style={{ fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>{desc}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* FOOTER */}
+      <div style={{ borderTop: '1px solid var(--gray-200)', padding: '24px', textAlign: 'center', background: 'var(--gray-50)' }}>
+        <div style={{ display: 'flex', gap: 24, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, color: 'var(--gray-400)' }}>© 2026 Volunteer. All rights reserved.</span>
+          <button
+            onClick={() => onNavigate && onNavigate('legal')}
+            style={{ background: 'none', border: 'none', color: 'var(--gray-400)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+          >
+            Terms of Service
+          </button>
+          <button
+            onClick={() => { onNavigate && onNavigate('legal'); }}
+            style={{ background: 'none', border: 'none', color: 'var(--gray-400)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+          >
+            Privacy Policy
+          </button>
         </div>
       </div>
     </div>
