@@ -186,7 +186,7 @@ export async function getProviderBookings(providerId) {
 export async function acceptBooking(bookingId, providerId) {
   const { data, error } = await supabase
     .from('bookings')
-    .update({ provider_id: providerId, status: 'Accepted', tracking_status: null })
+    .update({ provider_id: providerId, status: 'Accepted' })
     .eq('id', bookingId)
     .select()
     .single();
