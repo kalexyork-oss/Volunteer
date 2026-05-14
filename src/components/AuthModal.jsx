@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase';
 export default function AuthModal({ onClose, onSuccess, initialMode }) {
   const [mode, setMode]         = useState(initialMode || 'signin');
   const [role, setRole]         = useState('customer');
-  const [form, setForm]         = useState({ name: '', email: '', password: '', zip: '', newPassword: '', confirmPassword: '' });
+  const [form, setForm]         = useState({ name: '', email: '', password: '', zip: '', dob: '', newPassword: '', confirmPassword: '' });
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState('');
   const [loading, setLoading]   = useState(false);
@@ -15,6 +16,17 @@ export default function AuthModal({ onClose, onSuccess, initialMode }) {
 
   useEffect(() => { if (initialMode) setMode(initialMode); }, [initialMode]);
 
+  // Calculate age from DOB
+  const getAge = (dob) => {
+    if (!dob) return null;
+    const today = new Date();
+    const birth = new Date(dob);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+  };
+
   const handleSubmit = async () => {
     setError(''); setSuccess('');
     setLoading(true);
@@ -23,6 +35,15 @@ export default function AuthModal({ onClose, onSuccess, initialMode }) {
       if (!form.name) { setError('Please enter your name.'); setLoading(false); return; }
       if (!form.email || !form.password) { setError('Email and password are required.'); setLoading(false); return; }
       if (form.password.length < 6) { setError('Password must be at least 6 characters.'); setLoading(false); return; }
+
+      // Age check
+      if (!form.dob) { setError('Please enter your date of birth.'); setLoading(false); return; }
+      const age = getAge(form.dob);
+      if (age === null || age < 18) { setError('You must be 18 or older to use Volunteer.'); setLoading(false); return; }
+
+      // Age confirmation checkbox
+      if (!ageConfirmed) { setError('Please confirm you are 18 years of age or older.'); setLoading(false); return; }
+
       const { error: err } = await signUp({ ...form, role });
       if (err) { setError(err.message); setLoading(false); return; }
       setSuccess('Account created! Check your email to confirm, then sign in.');
@@ -61,6 +82,11 @@ export default function AuthModal({ onClose, onSuccess, initialMode }) {
 
   const titles = { signin: 'Welcome back', signup: 'Create account', forgot: 'Reset password', reset: 'Set new password' };
 
+  // Live age feedback
+  const age = getAge(form.dob);
+  const ageValid = age !== null && age >= 18;
+  const ageInvalid = age !== null && age < 18;
+
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" style={{ maxWidth: 420 }}>
@@ -79,6 +105,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {mode === 'signup' && (<>
             <div><label>Full Name</label><input type="text" placeholder="Your name" value={form.name} onChange={e => u('name', e.target.value)} autoFocus /></div>
+
             <div>
               <label>I want to...</label>
               <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
@@ -93,7 +120,45 @@ export default function AuthModal({ onClose, onSuccess, initialMode }) {
                 ))}
               </div>
             </div>
+
             <div><label>Zip Code</label><input type="text" placeholder="Your zip code" value={form.zip} onChange={e => u('zip', e.target.value)} maxLength={5} /></div>
+
+            {/* Date of Birth */}
+            <div>
+              <label>Date of Birth</label>
+              <input
+                type="date"
+                value={form.dob}
+                max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+                onChange={e => u('dob', e.target.value)}
+              />
+              {ageValid && (
+                <div style={{ fontSize: 12, color: '#15803d', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  ✓ Age verified — you're {age} years old
+                </div>
+              )}
+              {ageInvalid && (
+                <div style={{ fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                  ✗ You must be 18 or older to use Volunteer
+                </div>
+              )}
+            </div>
+
+            {/* Age confirmation checkbox */}
+            <div
+              onClick={() => setAgeConfirmed(c => !c)}
+              style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '12px 14px', borderRadius: 10, background: ageConfirmed ? '#f0fdf4' : 'var(--gray-50)', border: `1.5px solid ${ageConfirmed ? '#86efac' : 'var(--gray-200)'}`, transition: 'all .2s' }}
+            >
+              <div style={{ width: 20, height: 20, borderRadius: 5, border: `2px solid ${ageConfirmed ? '#22c55e' : 'var(--gray-300)'}`, background: ageConfirmed ? '#22c55e' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, transition: 'all .2s' }}>
+                {ageConfirmed && <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>✓</span>}
+              </div>
+              <span style={{ fontSize: 13, color: 'var(--gray-700)', lineHeight: 1.5 }}>
+                I confirm that I am <strong>18 years of age or older</strong> and agree to the{' '}
+                <span style={{ color: 'var(--navy)', textDecoration: 'underline' }}>Terms of Service</span>
+                {' '}and{' '}
+                <span style={{ color: 'var(--navy)', textDecoration: 'underline' }}>Privacy Policy</span>.
+              </span>
+            </div>
           </>)}
 
           {mode === 'forgot' && (
@@ -158,7 +223,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode }) {
             </div>
           </>)}
 
-          {error && <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991b1b' }}>⚠️ {error}</div>}
+          {error   && <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991b1b' }}>⚠️ {error}</div>}
           {success && <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#166534' }}>✓ {success}</div>}
 
           <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} onClick={handleSubmit} disabled={loading}>
