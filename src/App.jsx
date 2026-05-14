@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { supabase } from './lib/supabase';
 import { getProfile, getProviderById, getAllProviders, getMyBookings } from './lib/db';
 import { sendNotification, sendSMSNotification } from './lib/notifications';
@@ -169,6 +170,7 @@ export default function App() {
       {showPost  && <PostServiceModal onClose={() => setShowPost(false)} onSuccess={handlePostSuccess} userId={user?.id} existing={providerProfile} />}
       {activeChat && <ChatModal booking={activeChat.booking} currentUserId={user?.id} currentUserName={profile?.name} otherUserName={activeChat.otherName} onClose={() => setActiveChat(null)} />}
       {toast     && <Toast msg={toast} onClose={() => setToast(null)} />}
+      <Analytics />
     </div>
   );
 }
