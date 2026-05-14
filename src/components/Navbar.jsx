@@ -10,12 +10,22 @@ const NAV_ITEMS = [
   { key: 'admin',    label: 'Admin',    icon: '⚙️' },
 ];
 
+function Logo() {
+  return (
+    <svg width="160" height="40" viewBox="0 0 480 140" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="60" cy="70" r="34" fill="#22c55e"/>
+      <polyline points="44,70 56,84 78,58" fill="none" stroke="white" stroke-width="5" strokeLinecap="round" strokeLinejoin="round"/>
+      <text x="110" y="87" fontFamily="Sora, Arial, sans-serif" fontWeight="800" fontSize="52" fill="white">Volun</text>
+      <text x="314" y="87" fontFamily="Sora, Arial, sans-serif" fontWeight="800" fontSize="52" fill="#22c55e">teer</text>
+    </svg>
+  );
+}
+
 export default function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
-  const [menuOpen,   setMenuOpen]   = useState(false);
-  const [scrolled,   setScrolled]   = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef(null);
 
-  // Close menu on outside click
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
@@ -24,10 +34,8 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Close menu on page change
   useEffect(() => { setMenuOpen(false); }, [page]);
 
-  // Shadow on scroll
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 8);
     window.addEventListener('scroll', handler);
@@ -54,16 +62,12 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
         {/* Logo */}
         <div
           onClick={() => navigate('home')}
-          style={{ fontFamily: 'Sora', fontSize: 20, fontWeight: 800, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
         >
-          <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
-            <circle cx="14" cy="14" r="14" fill="rgba(34,197,94,0.2)" />
-            <path d="M8 14.5l4 4 8-8" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Volun<span style={{ color: 'var(--green)' }}>teer</span>
+          <Logo />
         </div>
 
-        {/* Desktop nav links — hidden on mobile */}
+        {/* Desktop nav links */}
         <div className="desktop-nav" style={{ display: 'flex', gap: 2 }}>
           {NAV_ITEMS.map(({ key, label }) => (
             <button
@@ -85,10 +89,7 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           {user ? (
             <>
-              {/* Notification bell — always visible */}
               <NotificationBell userId={user.id} onNavigate={setPage} />
-
-              {/* Settings — desktop only */}
               <button
                 className="desktop-only"
                 onClick={() => navigate('settings')}
@@ -96,13 +97,9 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
               >
                 ⚙️
               </button>
-
-              {/* User name — desktop only */}
               <span className="desktop-only" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
                 Hi, {profile?.name?.split(' ')[0] || 'there'}
               </span>
-
-              {/* Sign out — desktop only */}
               <button
                 className="desktop-only btn-outline btn-sm"
                 style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }}
@@ -121,12 +118,9 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
             </button>
           )}
 
-          {/* Book Now — always visible */}
-          <button className="btn-primary btn-sm" onClick={onBook}>
-            Book Now
-          </button>
+          <button className="btn-primary btn-sm" onClick={onBook}>Book Now</button>
 
-          {/* Hamburger — mobile only */}
+          {/* Hamburger */}
           <button
             className="mobile-only"
             onClick={() => setMenuOpen(o => !o)}
@@ -144,23 +138,17 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
         </div>
       </nav>
 
-      {/* Mobile dropdown menu */}
+      {/* Mobile dropdown */}
       {menuOpen && (
         <div
           ref={menuRef}
           style={{
-            position: 'fixed',
-            top: 64,
-            left: 0,
-            right: 0,
-            background: 'var(--navy-dark)',
-            zIndex: 99,
+            position: 'fixed', top: 64, left: 0, right: 0,
+            background: 'var(--navy-dark)', zIndex: 99,
             borderBottom: '1px solid rgba(255,255,255,0.1)',
-            animation: 'slideDown .2s ease',
-            paddingBottom: 8,
+            animation: 'slideDown .2s ease', paddingBottom: 8,
           }}
         >
-          {/* User info at top of mobile menu */}
           {user && (
             <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--navy-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Sora', fontWeight: 700, color: 'white', fontSize: 14 }}>
@@ -173,7 +161,6 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
             </div>
           )}
 
-          {/* Nav links */}
           {NAV_ITEMS.map(({ key, label, icon }) => (
             <button
               key={key}
@@ -181,12 +168,12 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
               style={{
                 width: '100%', padding: '14px 20px', textAlign: 'left',
                 background: page === key ? 'rgba(255,255,255,0.08)' : 'transparent',
-                border: 'none', cursor: 'pointer', color: page === key ? 'white' : 'rgba(255,255,255,0.75)',
+                border: 'none', cursor: 'pointer',
+                color: page === key ? 'white' : 'rgba(255,255,255,0.75)',
                 fontSize: 15, fontWeight: page === key ? 600 : 400,
                 display: 'flex', alignItems: 'center', gap: 12,
                 borderLeft: page === key ? '3px solid var(--green)' : '3px solid transparent',
-                transition: 'all .15s',
-                fontFamily: 'DM Sans, sans-serif',
+                transition: 'all .15s', fontFamily: 'DM Sans, sans-serif',
               }}
             >
               <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{icon}</span>
@@ -195,10 +182,8 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
             </button>
           ))}
 
-          {/* Divider */}
           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '8px 0' }} />
 
-          {/* Settings & auth */}
           <button
             onClick={() => navigate('settings')}
             style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'DM Sans, sans-serif' }}
@@ -232,16 +217,15 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
         position: 'fixed', bottom: 0, left: 0, right: 0,
         background: 'var(--navy)',
         borderTop: '1px solid rgba(255,255,255,0.1)',
-        display: 'flex',
-        zIndex: 98,
+        display: 'flex', zIndex: 98,
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
         {[
-          { key: 'home',     label: 'Home',    icon: '🏠' },
-          { key: 'map',      label: 'Map',     icon: '🗺️' },
-          { key: 'customer', label: 'Bookings',icon: '📋' },
-          { key: 'messages', label: 'Messages',icon: '💬' },
-          { key: 'provider', label: 'Provider',icon: '🔧' },
+          { key: 'home',     label: 'Home',     icon: '🏠' },
+          { key: 'map',      label: 'Map',      icon: '🗺️' },
+          { key: 'customer', label: 'Bookings', icon: '📋' },
+          { key: 'messages', label: 'Messages', icon: '💬' },
+          { key: 'provider', label: 'Provider', icon: '🔧' },
         ].map(({ key, label, icon }) => (
           <button
             key={key}
@@ -267,16 +251,13 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
           from { opacity: 0; transform: translateY(-8px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .desktop-nav { display: flex !important; }
+        .desktop-nav  { display: flex !important; }
         .desktop-only { display: flex !important; }
         .mobile-only  { display: none !important; }
-
         @media (max-width: 768px) {
           .desktop-nav  { display: none !important; }
           .desktop-only { display: none !important; }
           .mobile-only  { display: flex !important; }
-
-          /* Add bottom padding so content isn't hidden behind bottom tab bar */
           body { padding-bottom: 70px; }
         }
       `}</style>
