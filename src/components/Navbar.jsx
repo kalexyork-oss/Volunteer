@@ -1,35 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import NotificationBell from './NotificationBell';
 
-const NAV_ITEMS = [
-  { key: 'home',     label: 'Home',     icon: '🏠' },
-  { key: 'map',      label: 'Map',      icon: '🗺️' },
-  { key: 'customer', label: 'Bookings', icon: '📋' },
-  { key: 'messages', label: 'Messages', icon: '💬' },
-  { key: 'provider', label: 'Provider', icon: '🔧' },
-  { key: 'admin',    label: 'Admin',    icon: '⚙️' },
-];
-
-function Logo() {
-  return (
-    <svg width="160" height="40" viewBox="0 0 480 140" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="60" cy="70" r="34" fill="#22c55e"/>
-      <polyline points="44,70 56,84 78,58" fill="none" stroke="white" stroke-width="5" strokeLinecap="round" strokeLinejoin="round"/>
-      <text x="110" y="87" fontFamily="Sora, Arial, sans-serif" fontWeight="800" fontSize="52" fill="white">Volun</text>
-      <text x="314" y="87" fontFamily="Sora, Arial, sans-serif" fontWeight="800" fontSize="52" fill="#22c55e">teer</text>
-    </svg>
-  );
-}
-
-export default function Navbar({ page, setPage, user, profile, onSignIn, onSignOut, onBook }) {
+export default function Navbar({ page, setPage, user, profile, isAdmin, onSignIn, onSignOut, onBook }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef(null);
 
+  const NAV_ITEMS = [
+    { key: 'home',     label: 'Home',     icon: '🏠' },
+    { key: 'map',      label: 'Map',      icon: '🗺️' },
+    { key: 'customer', label: 'Bookings', icon: '📋' },
+    { key: 'messages', label: 'Messages', icon: '💬' },
+    { key: 'provider', label: 'Provider', icon: '🔧' },
+    ...(isAdmin ? [{ key: 'admin', label: 'Admin', icon: '⚙️' }] : []),
+  ];
+
   useEffect(() => {
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
+    const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -47,41 +34,29 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
   return (
     <>
       <nav style={{
-        background: 'var(--navy)',
-        height: 64,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 20px',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        boxShadow: scrolled ? '0 2px 16px rgba(0,0,0,.25)' : 'none',
-        transition: 'box-shadow .2s',
+        background: 'var(--navy)', height: 64, display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', padding: '0 20px', position: 'sticky', top: 0, zIndex: 100,
+        boxShadow: scrolled ? '0 2px 16px rgba(0,0,0,.25)' : 'none', transition: 'box-shadow .2s',
       }}>
         {/* Logo */}
-        <div
-          onClick={() => navigate('home')}
-          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-        >
-          <Logo />
+        <div onClick={() => navigate('home')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <svg width="160" height="40" viewBox="0 0 480 140" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="60" cy="70" r="34" fill="#22c55e"/>
+            <polyline points="44,70 56,84 78,58" fill="none" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+            <text x="110" y="87" fontFamily="Sora, Arial, sans-serif" fontWeight="800" fontSize="52" fill="white">Volun</text>
+            <text x="314" y="87" fontFamily="Sora, Arial, sans-serif" fontWeight="800" fontSize="52" fill="#22c55e">teer</text>
+          </svg>
         </div>
 
-        {/* Desktop nav links */}
+        {/* Desktop nav */}
         <div className="desktop-nav" style={{ display: 'flex', gap: 2 }}>
           {NAV_ITEMS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => navigate(key)}
-              style={{
-                padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                fontSize: 13, fontWeight: 500, transition: 'all .2s',
-                background: page === key ? 'rgba(255,255,255,0.15)' : 'transparent',
-                color: page === key ? 'white' : 'rgba(255,255,255,0.7)',
-              }}
-            >
-              {label}
-            </button>
+            <button key={key} onClick={() => navigate(key)} style={{
+              padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: 500, transition: 'all .2s',
+              background: page === key ? 'rgba(255,255,255,0.15)' : 'transparent',
+              color: page === key ? 'white' : 'rgba(255,255,255,0.7)',
+            }}>{label}</button>
           ))}
         </div>
 
@@ -90,47 +65,15 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
           {user ? (
             <>
               <NotificationBell userId={user.id} onNavigate={setPage} />
-              <button
-                className="desktop-only"
-                onClick={() => navigate('settings')}
-                style={{ background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: '6px 8px', borderRadius: 8 }}
-              >
-                ⚙️
-              </button>
-              <span className="desktop-only" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
-                Hi, {profile?.name?.split(' ')[0] || 'there'}
-              </span>
-              <button
-                className="desktop-only btn-outline btn-sm"
-                style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }}
-                onClick={onSignOut}
-              >
-                Sign Out
-              </button>
+              <button className="desktop-only" onClick={() => navigate('settings')} style={{ background: page === 'settings' ? 'rgba(255,255,255,0.15)' : 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 18, padding: '6px 8px', borderRadius: 8 }}>⚙️</button>
+              <span className="desktop-only" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>Hi, {profile?.name?.split(' ')[0] || 'there'}</span>
+              <button className="desktop-only btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignOut}>Sign Out</button>
             </>
           ) : (
-            <button
-              className="desktop-only btn-outline btn-sm"
-              style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }}
-              onClick={onSignIn}
-            >
-              Sign In
-            </button>
+            <button className="desktop-only btn-outline btn-sm" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)', padding: '7px 14px' }} onClick={onSignIn}>Sign In</button>
           )}
-
           <button className="btn-primary btn-sm" onClick={onBook}>Book Now</button>
-
-          {/* Hamburger */}
-          <button
-            className="mobile-only"
-            onClick={() => setMenuOpen(o => !o)}
-            style={{
-              background: menuOpen ? 'rgba(255,255,255,0.15)' : 'none',
-              border: 'none', cursor: 'pointer', padding: '8px', borderRadius: 8,
-              display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center',
-              width: 40, height: 40,
-            }}
-          >
+          <button className="mobile-only" onClick={() => setMenuOpen(o => !o)} style={{ background: menuOpen ? 'rgba(255,255,255,0.15)' : 'none', border: 'none', cursor: 'pointer', padding: '8px', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}>
             <span style={{ width: 20, height: 2, background: 'white', borderRadius: 2, display: 'block', transition: 'all .25s', transform: menuOpen ? 'rotate(45deg) translate(5px, 5px)' : 'none' }} />
             <span style={{ width: 20, height: 2, background: 'white', borderRadius: 2, display: 'block', transition: 'all .25s', opacity: menuOpen ? 0 : 1 }} />
             <span style={{ width: 20, height: 2, background: 'white', borderRadius: 2, display: 'block', transition: 'all .25s', transform: menuOpen ? 'rotate(-45deg) translate(5px, -5px)' : 'none' }} />
@@ -140,15 +83,7 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
 
       {/* Mobile dropdown */}
       {menuOpen && (
-        <div
-          ref={menuRef}
-          style={{
-            position: 'fixed', top: 64, left: 0, right: 0,
-            background: 'var(--navy-dark)', zIndex: 99,
-            borderBottom: '1px solid rgba(255,255,255,0.1)',
-            animation: 'slideDown .2s ease', paddingBottom: 8,
-          }}
-        >
+        <div ref={menuRef} style={{ position: 'fixed', top: 64, left: 0, right: 0, background: 'var(--navy-dark)', zIndex: 99, borderBottom: '1px solid rgba(255,255,255,0.1)', animation: 'slideDown .2s ease', paddingBottom: 8 }}>
           {user && (
             <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--navy-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Sora', fontWeight: 700, color: 'white', fontSize: 14 }}>
@@ -160,66 +95,31 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
               </div>
             </div>
           )}
-
           {NAV_ITEMS.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => navigate(key)}
-              style={{
-                width: '100%', padding: '14px 20px', textAlign: 'left',
-                background: page === key ? 'rgba(255,255,255,0.08)' : 'transparent',
-                border: 'none', cursor: 'pointer',
-                color: page === key ? 'white' : 'rgba(255,255,255,0.75)',
-                fontSize: 15, fontWeight: page === key ? 600 : 400,
-                display: 'flex', alignItems: 'center', gap: 12,
-                borderLeft: page === key ? '3px solid var(--green)' : '3px solid transparent',
-                transition: 'all .15s', fontFamily: 'DM Sans, sans-serif',
-              }}
-            >
+            <button key={key} onClick={() => navigate(key)} style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: page === key ? 'rgba(255,255,255,0.08)' : 'transparent', border: 'none', cursor: 'pointer', color: page === key ? 'white' : 'rgba(255,255,255,0.75)', fontSize: 15, fontWeight: page === key ? 600 : 400, display: 'flex', alignItems: 'center', gap: 12, borderLeft: page === key ? '3px solid var(--green)' : '3px solid transparent', transition: 'all .15s', fontFamily: 'DM Sans, sans-serif' }}>
               <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>{icon}</span>
               {label}
               {page === key && <span style={{ marginLeft: 'auto', color: 'var(--green)', fontSize: 12 }}>●</span>}
             </button>
           ))}
-
           <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '8px 0' }} />
-
-          <button
-            onClick={() => navigate('settings')}
-            style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'DM Sans, sans-serif' }}
-          >
-            <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>⚙️</span>
-            Settings
+          <button onClick={() => navigate('settings')} style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'DM Sans, sans-serif' }}>
+            <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>⚙️</span>Settings
           </button>
-
           {user ? (
-            <button
-              onClick={() => { onSignOut(); setMenuOpen(false); }}
-              style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'DM Sans, sans-serif' }}
-            >
-              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🚪</span>
-              Sign Out
+            <button onClick={() => { onSignOut(); setMenuOpen(false); }} style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'DM Sans, sans-serif' }}>
+              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>🚪</span>Sign Out
             </button>
           ) : (
-            <button
-              onClick={() => { onSignIn(); setMenuOpen(false); }}
-              style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'DM Sans, sans-serif' }}
-            >
-              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>👤</span>
-              Sign In
+            <button onClick={() => { onSignIn(); setMenuOpen(false); }} style={{ width: '100%', padding: '14px 20px', textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'DM Sans, sans-serif' }}>
+              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>👤</span>Sign In
             </button>
           )}
         </div>
       )}
 
       {/* Mobile bottom tab bar */}
-      <div className="mobile-only" style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: 'var(--navy)',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        display: 'flex', zIndex: 98,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}>
+      <div className="mobile-only" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--navy)', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', zIndex: 98, paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {[
           { key: 'home',     label: 'Home',     icon: '🏠' },
           { key: 'map',      label: 'Map',      icon: '🗺️' },
@@ -227,30 +127,15 @@ export default function Navbar({ page, setPage, user, profile, onSignIn, onSignO
           { key: 'messages', label: 'Messages', icon: '💬' },
           { key: 'provider', label: 'Provider', icon: '🔧' },
         ].map(({ key, label, icon }) => (
-          <button
-            key={key}
-            onClick={() => navigate(key)}
-            style={{
-              flex: 1, padding: '10px 4px 8px', border: 'none', cursor: 'pointer',
-              background: 'transparent',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-              borderTop: page === key ? '2px solid var(--green)' : '2px solid transparent',
-              transition: 'all .15s',
-            }}
-          >
+          <button key={key} onClick={() => navigate(key)} style={{ flex: 1, padding: '10px 4px 8px', border: 'none', cursor: 'pointer', background: 'transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, borderTop: page === key ? '2px solid var(--green)' : '2px solid transparent', transition: 'all .15s' }}>
             <span style={{ fontSize: 20 }}>{icon}</span>
-            <span style={{ fontSize: 10, color: page === key ? 'var(--green)' : 'rgba(255,255,255,0.5)', fontWeight: page === key ? 600 : 400, fontFamily: 'DM Sans, sans-serif' }}>
-              {label}
-            </span>
+            <span style={{ fontSize: 10, color: page === key ? 'var(--green)' : 'rgba(255,255,255,0.5)', fontWeight: page === key ? 600 : 400, fontFamily: 'DM Sans, sans-serif' }}>{label}</span>
           </button>
         ))}
       </div>
 
       <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
         .desktop-nav  { display: flex !important; }
         .desktop-only { display: flex !important; }
         .mobile-only  { display: none !important; }

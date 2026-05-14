@@ -21,6 +21,9 @@ import MessagesPage      from './pages/MessagesPage';
 import MapPage           from './pages/MapPage';
 import LegalPage         from './pages/LegalPage';
 
+// ---- Only this email can access the Admin panel ----
+const ADMIN_EMAIL = 'yorkkalex@gmail.com';
+
 export default function App() {
   const [page,            setPage]            = useState('home');
   const [viewProfileId,   setViewProfileId]   = useState(null);
@@ -38,6 +41,8 @@ export default function App() {
   const [toast,           setToast]           = useState(null);
   const [loading,         setLoading]         = useState(true);
   const [darkMode,        setDarkMode]        = useState(() => localStorage.getItem('volunteer_dark_mode') === 'true');
+
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
   useEffect(() => { document.body.classList.toggle('dark', darkMode); }, [darkMode]);
 
@@ -141,6 +146,7 @@ export default function App() {
         setPage={setPage}
         user={user}
         profile={profile}
+        isAdmin={isAdmin}
         onSignIn={() => setShowAuth(true)}
         onSignOut={handleSignOut}
         onBook={() => openBook()}
@@ -159,7 +165,7 @@ export default function App() {
           onJobCompleted={handleJobCompleted}
         />
       )}
-      {page === 'admin'    && <AdminPage />}
+      {page === 'admin'    && <AdminPage isAdmin={isAdmin} />}
       {page === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} user={user} profile={profile} onProfileUpdate={p => setProfile(p)} />}
       {page === 'profile'  && <PublicProfilePage providerId={viewProfileId} onBook={openBook} onBack={() => setPage('home')} />}
       {page === 'legal'    && <LegalPage />}
