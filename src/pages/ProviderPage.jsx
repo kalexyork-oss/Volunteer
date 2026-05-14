@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getPendingBookings, getProviderBookings, acceptBooking, updateBookingStatus, updateTrackingStatus } from '../lib/db';
 import { supabase } from '../lib/supabase';
 
@@ -130,7 +130,10 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
   const [online,    setOnline]    = useState(providerProfile?.available ?? true);
   const [toggling,  setToggling]  = useState(false);
   const [acting,    setActing]    = useState(null);
-  const [tracking,  setTracking]  = useState(null); // bookingId being updated
+  const [tracking,    setTracking]    = useState(null);
+  const [idUploading, setIdUploading] = useState(false);
+  const [idStatus,    setIdStatus]    = useState(providerProfile?.verification_status || 'none');
+  const idInputRef = useRef(null);
 
   const [vacStart,  setVacStart]  = useState(providerProfile?.vacation_start || '');
   const [vacEnd,    setVacEnd]    = useState(providerProfile?.vacation_end || '');
@@ -218,6 +221,20 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
     }, () => {
       window.open(`https://maps.google.com/?q=${zip}`, '_blank');
     });
+  };
+
+  const handleIdUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    setIdUploading(true);
+    const path = `${userId}/id.${file.name.split('.').pop()}`;
+    const { error: uploadError } = await supabase.storage
+      .from('verifications')
+      .upload(path, file, { upsert: true });
+    if (uploadError) { alert('Upload failed: ' + uploadError.message); setIdUploading(false); return; }
+    await supabase.from('providers').update({ id_url: path, verification_status: 'pending' }).eq('id', userId);
+    setIdStatus('pending');
+    setIdUploading(false);
   };
 
   const saveVacation = async () => {
@@ -605,6 +622,60 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
               </div>
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--gray-200)' }}>
                 <button className="btn-outline btn-sm" onClick={onPost}>Edit Profile</button>
+              </div>
+
+              {/* ID Verification */}
+              <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--gray-200)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <span style={{ fontSize: 20 }}>🪪</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--navy)' }}>ID Verification</div>
+                    <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>Get a verified badge on your profile to build trust with customers</div>
+                  </div>
+                </div>
+
+                {idStatus === 'none' && (
+                  <div>
+                    <p style={{ fontSize: 13, color: 'var(--gray-600)', marginBottom: 12, lineHeight: 1.6 }}>
+                      Upload a photo of your government-issued ID (driver's license, passport, or state ID). It will only be visible to platform admins.
+                    </p>
+                    <input ref={idInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleIdUpload} />
+                    <button
+                      onClick={() => idInputRef.current?.click()}
+                      disabled={idUploading}
+                      style={{ background: 'var(--navy)', color: 'white', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      {idUploading ? 'Uploading...' : '📤 Upload ID Photo'}
+                    </button>
+                  </div>
+                )}
+
+                {idStatus === 'pending' && (
+                  <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 10, padding: '12px 16px' }}>
+                    <div style={{ fontWeight: 600, color: '#854d0e', marginBottom: 4 }}>⏳ Under Review</div>
+                    <div style={{ fontSize: 13, color: '#92400e' }}>Your ID has been submitted and is being reviewed by our team. You'll be notified once verified.</div>
+                  </div>
+                )}
+
+                {idStatus === 'verified' && (
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 16px' }}>
+                    <div style={{ fontWeight: 600, color: '#15803d', marginBottom: 4 }}>✅ Verified</div>
+                    <div style={{ fontSize: 13, color: '#166534' }}>Your identity has been verified. A verified badge now appears on your public profile.</div>
+                  </div>
+                )}
+
+                {idStatus === 'rejected' && (
+                  <div>
+                    <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '12px 16px', marginBottom: 12 }}>
+                      <div style={{ fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>❌ Not Approved</div>
+                      <div style={{ fontSize: 13, color: '#b91c1c' }}>Your ID submission was not approved. Please resubmit with a clear, valid government-issued ID.</div>
+                    </div>
+                    <input ref={idInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleIdUpload} />
+                    <button onClick={() => idInputRef.current?.click()} disabled={idUploading} style={{ background: 'var(--navy)', color: 'white', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      {idUploading ? 'Uploading...' : '📤 Resubmit ID'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
