@@ -1,10 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getPendingBookings, getProviderBookings, acceptBooking, updateBookingStatus } from '../lib/db';
+import { getPendingBookings, getProviderBookings, acceptBooking, updateBookingStatus, updateTrackingStatus } from '../lib/db';
 import { supabase } from '../lib/supabase';
 
 function StatusBadge({ status }) {
   const map = { Pending: 'badge-yellow', Accepted: 'badge-blue', Completed: 'badge-green', Cancelled: 'badge-red' };
   return <span className={`badge ${map[status] || 'badge-gray'}`}>{status}</span>;
+}
+
+// ---- Tracking status label ----
+function TrackingLabel({ trackingStatus }) {
+  const map = {
+    on_the_way:  { label: 'On The Way',  color: '#3b82f6', bg: '#eff6ff', icon: '🚗' },
+    arrived:     { label: 'Arrived',     color: '#f59e0b', bg: '#fffbeb', icon: '📍' },
+    in_progress: { label: 'In Progress', color: '#22c55e', bg: '#f0fdf4', icon: '🔧' },
+  };
+  const t = map[trackingStatus];
+  if (!t) return null;
+  return (
+    <span style={{ fontSize: 12, fontWeight: 600, color: t.color, background: t.bg, border: `1px solid ${t.color}30`, borderRadius: 8, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      {t.icon} {t.label}
+    </span>
+  );
 }
 
 // ---- Mini bar chart ----
@@ -19,12 +35,7 @@ function BarChart({ data, label, color = 'var(--green)' }) {
             <div style={{ fontSize: 10, color: 'var(--gray-500)', fontWeight: 600 }}>
               {d.value > 0 ? (label.includes('$') ? `$${d.value}` : d.value) : ''}
             </div>
-            <div style={{
-              width: '100%', borderRadius: '4px 4px 0 0',
-              background: color, opacity: 0.85,
-              height: `${Math.max((d.value / max) * 60, d.value > 0 ? 4 : 0)}px`,
-              transition: 'height .4s ease', minHeight: d.value > 0 ? 4 : 0,
-            }} />
+            <div style={{ width: '100%', borderRadius: '4px 4px 0 0', background: color, opacity: 0.85, height: `${Math.max((d.value / max) * 60, d.value > 0 ? 4 : 0)}px`, transition: 'height .4s ease', minHeight: d.value > 0 ? 4 : 0 }} />
             <div style={{ fontSize: 10, color: 'var(--gray-400)', whiteSpace: 'nowrap' }}>{d.label}</div>
           </div>
         ))}
@@ -38,7 +49,6 @@ function BookingCalendar({ bookings, vacationStart, vacationEnd }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const year  = currentDate.getFullYear();
   const month = currentDate.getMonth();
-
   const firstDay    = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -57,68 +67,53 @@ function BookingCalendar({ bookings, vacationStart, vacationEnd }) {
     const d = new Date(year, month, day);
     return d >= new Date(vacationStart) && d <= new Date(vacationEnd);
   };
-
   const isToday = (day) => {
-    const today = new Date();
-    return day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+    const t = new Date();
+    return day === t.getDate() && month === t.getMonth() && year === t.getFullYear();
   };
-
-  const dateStr = (day) => {
-    const m = String(month + 1).padStart(2, '0');
-    const d = String(day).padStart(2, '0');
-    return `${year}-${m}-${d}`;
-  };
-
+  const dateStr = (day) => `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   const STATUS_COLORS = { Accepted: '#3b82f6', Pending: '#f59e0b', Completed: '#22c55e', Cancelled: '#ef4444' };
   const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>‹</button>
+        <button onClick={() => setCurrentDate(new Date(year, month-1, 1))} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>‹</button>
         <span style={{ fontWeight: 600, color: 'var(--navy)', fontFamily: 'Sora' }}>{monthName}</span>
-        <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>›</button>
+        <button onClick={() => setCurrentDate(new Date(year, month+1, 1))} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 16 }}>›</button>
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
         {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
           <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--gray-400)', padding: '4px 0' }}>{d}</div>
         ))}
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-        {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
-        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-          const ds          = dateStr(day);
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => i+1).map(day => {
+          const ds = dateStr(day);
           const dayBookings = bookingsByDate[ds] || [];
-          const vacation    = isVacation(day);
-          const today       = isToday(day);
+          const vacation = isVacation(day);
+          const today = isToday(day);
           return (
-            <div key={day} style={{
-              minHeight: 52, borderRadius: 8, padding: '4px 6px',
-              background: vacation ? '#fef9c3' : today ? '#f0f4ff' : dayBookings.length > 0 ? '#f0fdf4' : 'var(--gray-50)',
-              border: `1px solid ${today ? 'var(--navy)' : vacation ? '#fde047' : 'var(--gray-200)'}`,
-            }}>
+            <div key={day} style={{ minHeight: 52, borderRadius: 8, padding: '4px 6px', background: vacation ? '#fef9c3' : today ? '#f0f4ff' : dayBookings.length > 0 ? '#f0fdf4' : 'var(--gray-50)', border: `1px solid ${today ? 'var(--navy)' : vacation ? '#fde047' : 'var(--gray-200)'}` }}>
               <div style={{ fontSize: 12, fontWeight: today ? 700 : 400, color: today ? 'var(--navy)' : 'var(--gray-700)' }}>{day}</div>
               {vacation && <div style={{ fontSize: 9, color: '#854d0e' }}>🏖️</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 2 }}>
-                {dayBookings.slice(0, 2).map((b, i) => (
+                {dayBookings.slice(0,2).map((b, i) => (
                   <div key={i} style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, background: STATUS_COLORS[b.status] || '#94a3b8', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {b.service?.split(' ')[0]}
                   </div>
                 ))}
-                {dayBookings.length > 2 && <div style={{ fontSize: 9, color: 'var(--gray-400)' }}>+{dayBookings.length - 2}</div>}
+                {dayBookings.length > 2 && <div style={{ fontSize: 9, color: 'var(--gray-400)' }}>+{dayBookings.length-2}</div>}
               </div>
             </div>
           );
         })}
       </div>
-
       <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
         {[['#3b82f6','Accepted'],['#f59e0b','Pending'],['#22c55e','Completed'],['#fde047','Vacation']].map(([color, label]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--gray-500)' }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
-            {label}
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />{label}
           </div>
         ))}
       </div>
@@ -135,6 +130,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
   const [online,    setOnline]    = useState(providerProfile?.available ?? true);
   const [toggling,  setToggling]  = useState(false);
   const [acting,    setActing]    = useState(null);
+  const [tracking,  setTracking]  = useState(null); // bookingId being updated
 
   const [vacStart,  setVacStart]  = useState(providerProfile?.vacation_start || '');
   const [vacEnd,    setVacEnd]    = useState(providerProfile?.vacation_end || '');
@@ -176,7 +172,6 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
     setActing(null);
     load();
     if (onRefresh) onRefresh();
-    // Fire notification to customer
     if (onJobAccepted && data) onJobAccepted(data);
   };
 
@@ -194,16 +189,42 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
     if (userId) await supabase.from('providers').update({ job_count: (providerProfile?.job_count || 0) + 1 }).eq('id', userId);
     setActing(null);
     load();
-    // Fire notification to customer
     if (onJobCompleted && data) onJobCompleted(data);
+  };
+
+  // Update tracking status — customer sees this live
+  const handleTracking = async (bookingId, status) => {
+    setTracking(bookingId);
+    await updateTrackingStatus(bookingId, status);
+    setTracking(null);
+    load();
+  };
+
+  // Share live Google Maps location in chat
+  const shareLocation = (zip) => {
+    if (!navigator.geolocation) {
+      // Fallback: open Google Maps with zip
+      window.open(`https://maps.google.com/?q=${zip}`, '_blank');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const url = `https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`;
+      // Copy to clipboard so provider can paste in chat
+      navigator.clipboard.writeText(url).then(() => {
+        alert('📍 Location link copied! Paste it in chat to share with your customer.');
+      }).catch(() => {
+        window.open(url, '_blank');
+      });
+    }, () => {
+      window.open(`https://maps.google.com/?q=${zip}`, '_blank');
+    });
   };
 
   const saveVacation = async () => {
     if (!userId) return;
     setSavingVac(true);
     await supabase.from('providers').update({ vacation_start: vacStart || null, vacation_end: vacEnd || null }).eq('id', userId);
-    setSavingVac(false);
-    setVacSaved(true);
+    setSavingVac(false); setVacSaved(true);
     setTimeout(() => setVacSaved(false), 2000);
   };
 
@@ -216,8 +237,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
     if (!userId) return;
     setSavingReply(true);
     await supabase.from('providers').update({ auto_reply: autoReply, auto_reply_enabled: autoReplyEnabled }).eq('id', userId);
-    setSavingReply(false);
-    setReplySaved(true);
+    setSavingReply(false); setReplySaved(true);
     setTimeout(() => setReplySaved(false), 2000);
   };
 
@@ -225,14 +245,14 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
   const completedJobs = myJobs.filter(b => b.status === 'Completed');
 
   const earningsData = useMemo(() => {
-    const now    = new Date();
+    const now = new Date();
     const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const d = new Date(now.getFullYear(), now.getMonth()-(5-i), 1);
       return { label: d.toLocaleDateString('en-US', { month: 'short' }), month: d.getMonth(), year: d.getFullYear(), value: 0 };
     });
     completedJobs.forEach(b => {
       if (!b.created_at || !b.price) return;
-      const d    = new Date(b.created_at);
+      const d = new Date(b.created_at);
       const slot = months.find(m => m.month === d.getMonth() && m.year === d.getFullYear());
       if (slot) slot.value += b.price;
     });
@@ -240,14 +260,14 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
   }, [completedJobs]);
 
   const jobsData = useMemo(() => {
-    const now    = new Date();
+    const now = new Date();
     const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const d = new Date(now.getFullYear(), now.getMonth()-(5-i), 1);
       return { label: d.toLocaleDateString('en-US', { month: 'short' }), month: d.getMonth(), year: d.getFullYear(), value: 0 };
     });
     completedJobs.forEach(b => {
       if (!b.created_at) return;
-      const d    = new Date(b.created_at);
+      const d = new Date(b.created_at);
       const slot = months.find(m => m.month === d.getMonth() && m.year === d.getFullYear());
       if (slot) slot.value += 1;
     });
@@ -266,6 +286,15 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
     ['tools',     'Tools'],
     ['profile',   'My Profile'],
   ];
+
+  // Next tracking step for a given booking
+  const nextTrackingStep = (b) => {
+    const ts = b.tracking_status;
+    if (!ts)               return { status: 'on_the_way',  label: '🚗 On My Way',    color: '#3b82f6' };
+    if (ts === 'on_the_way') return { status: 'arrived',     label: '📍 I\'ve Arrived', color: '#f59e0b' };
+    if (ts === 'arrived')    return { status: 'in_progress', label: '🔧 Start Job',     color: '#22c55e' };
+    return null;
+  };
 
   return (
     <div className="section">
@@ -355,50 +384,95 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
                 <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 2 }}>📅 {b.date} at {b.time} · 📍 {b.zip}</div>
                 {b.notes && <div style={{ fontSize: 13, color: 'var(--gray-600)', marginTop: 4 }}>"{b.notes}"</div>}
               </div>
-              {b.price && (
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--green)' }}>${b.price}</div>
-                  <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>est.</div>
-                </div>
-              )}
-              {userId && (
-                <button className="btn-primary btn-sm" onClick={() => handleAccept(b.id)} disabled={acting === b.id}>
-                  {acting === b.id ? '...' : 'Accept ✓'}
-                </button>
-              )}
+              {b.price && <div style={{ textAlign: 'center' }}><div style={{ fontWeight: 700, fontSize: 20, color: 'var(--green)' }}>${b.price}</div><div style={{ fontSize: 11, color: 'var(--gray-400)' }}>est.</div></div>}
+              {userId && <button className="btn-primary btn-sm" onClick={() => handleAccept(b.id)} disabled={acting === b.id}>{acting === b.id ? '...' : 'Accept ✓'}</button>}
             </div>
           ))}
         </div>
       )}
 
-      {/* MY JOBS (active) */}
+      {/* MY JOBS (active) — WITH TRACKING BUTTONS */}
       {!loading && tab === 'active' && (
         <div>
           {activeJobs.length === 0 ? (
             <div className="empty-state"><p>No active jobs. Accept from Available Jobs.</p></div>
-          ) : activeJobs.map(b => (
-            <div key={b.id} className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 600, color: 'var(--gray-800)', fontSize: 16 }}>{b.service}</div>
-                  <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 2 }}>📅 {b.date} at {b.time} · 📍 {b.zip}</div>
-                  {b.notes && <div style={{ fontSize: 13, color: 'var(--gray-600)', marginTop: 4 }}>"{b.notes}"</div>}
+          ) : activeJobs.map(b => {
+            const next = nextTrackingStep(b);
+            return (
+              <div key={b.id} className="card" style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, color: 'var(--gray-800)', fontSize: 16 }}>{b.service}</div>
+                    <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 2 }}>📅 {b.date} at {b.time} · 📍 {b.zip}</div>
+                    {b.notes && <div style={{ fontSize: 13, color: 'var(--gray-600)', marginTop: 4 }}>"{b.notes}"</div>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <StatusBadge status={b.status} />
+                    {b.price && <span style={{ fontWeight: 700, color: 'var(--green)' }}>${b.price}</span>}
+                    {b.tracking_status && <TrackingLabel trackingStatus={b.tracking_status} />}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                  <StatusBadge status={b.status} />
-                  {b.price && <span style={{ fontWeight: 700, color: 'var(--green)' }}>${b.price}</span>}
+
+                {/* Tracking action buttons */}
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--gray-100)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Update Status for Customer
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {/* Next tracking step button */}
+                    {next && (
+                      <button
+                        onClick={() => handleTracking(b.id, next.status)}
+                        disabled={tracking === b.id}
+                        style={{ background: next.color, color: 'white', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: tracking === b.id ? 0.6 : 1 }}
+                      >
+                        {tracking === b.id ? '...' : next.label}
+                      </button>
+                    )}
+
+                    {/* Share location button */}
+                    <button
+                      onClick={() => shareLocation(b.zip)}
+                      style={{ background: 'none', border: '1.5px solid var(--gray-200)', color: 'var(--gray-600)', borderRadius: 8, padding: '9px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      📍 Share My Location
+                    </button>
+
+                    {/* Mark completed */}
+                    {b.tracking_status === 'in_progress' && (
+                      <button
+                        onClick={() => handleComplete(b.id)}
+                        disabled={acting === b.id}
+                        style={{ background: 'var(--green)', color: 'white', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        {acting === b.id ? '...' : '✅ Mark Completed'}
+                      </button>
+                    )}
+
+                    {/* Completed always available as fallback */}
+                    {b.tracking_status !== 'in_progress' && (
+                      <button
+                        onClick={() => handleComplete(b.id)}
+                        disabled={acting === b.id}
+                        style={{ background: 'none', border: '1.5px solid #86efac', color: '#15803d', borderRadius: 8, padding: '9px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}
+                      >
+                        {acting === b.id ? '...' : '✅ Complete'}
+                      </button>
+                    )}
+
+                    {/* Decline */}
+                    <button
+                      onClick={() => handleDecline(b.id)}
+                      disabled={acting === b.id}
+                      style={{ background: 'none', border: '1.5px solid #fca5a5', color: '#ef4444', borderRadius: 8, padding: '9px 14px', fontSize: 13, cursor: 'pointer' }}
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--gray-100)' }}>
-                <button onClick={() => handleComplete(b.id)} disabled={acting === b.id} style={{ background: 'var(--green)', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                  {acting === b.id ? '...' : '✅ Mark Completed'}
-                </button>
-                <button onClick={() => handleDecline(b.id)} disabled={acting === b.id} style={{ background: 'none', border: '1.5px solid #fca5a5', color: '#ef4444', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>
-                  Decline
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -432,7 +506,7 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
             <h3 style={{ fontSize: 16, color: 'var(--gray-800)', marginBottom: 16 }}>Recent Completed Jobs</h3>
             {completedJobs.length === 0 ? (
               <p style={{ color: 'var(--gray-400)', fontSize: 14 }}>No completed jobs yet.</p>
-            ) : completedJobs.slice(0, 10).map(b => (
+            ) : completedJobs.slice(0,10).map(b => (
               <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--gray-100)' }}>
                 <div>
                   <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--gray-800)' }}>{b.service}</div>
@@ -448,48 +522,26 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
       {/* TOOLS */}
       {!loading && tab === 'tools' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Vacation Mode */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{ width: 36, height: 36, background: '#fef9c3', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏖️</div>
-              <div>
-                <h3 style={{ fontSize: 16, color: 'var(--gray-800)' }}>Vacation Mode</h3>
-                <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Hide yourself from search during time off</p>
-              </div>
+              <div><h3 style={{ fontSize: 16, color: 'var(--gray-800)' }}>Vacation Mode</h3><p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Hide yourself from search during time off</p></div>
             </div>
             <div className="grid-2" style={{ marginBottom: 14 }}>
-              <div>
-                <label>Start Date</label>
-                <input type="date" value={vacStart} onChange={e => setVacStart(e.target.value)} min={new Date().toISOString().split('T')[0]} />
-              </div>
-              <div>
-                <label>End Date</label>
-                <input type="date" value={vacEnd} onChange={e => setVacEnd(e.target.value)} min={vacStart || new Date().toISOString().split('T')[0]} />
-              </div>
+              <div><label>Start Date</label><input type="date" value={vacStart} onChange={e => setVacStart(e.target.value)} min={new Date().toISOString().split('T')[0]} /></div>
+              <div><label>End Date</label><input type="date" value={vacEnd} onChange={e => setVacEnd(e.target.value)} min={vacStart || new Date().toISOString().split('T')[0]} /></div>
             </div>
-            {vacStart && vacEnd && (
-              <div style={{ fontSize: 13, color: '#854d0e', background: '#fef9c3', padding: '8px 12px', borderRadius: 8, marginBottom: 12 }}>
-                🏖️ You'll be hidden from {new Date(vacStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {new Date(vacEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </div>
-            )}
+            {vacStart && vacEnd && <div style={{ fontSize: 13, color: '#854d0e', background: '#fef9c3', padding: '8px 12px', borderRadius: 8, marginBottom: 12 }}>🏖️ Hidden from {new Date(vacStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {new Date(vacEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn-primary btn-sm" onClick={saveVacation} disabled={savingVac || !vacStart || !vacEnd}>
-                {savingVac ? 'Saving...' : vacSaved ? '✓ Saved!' : 'Save Dates'}
-              </button>
-              {(vacStart || vacEnd) && (
-                <button onClick={clearVacation} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--gray-600)' }}>Clear</button>
-              )}
+              <button className="btn-primary btn-sm" onClick={saveVacation} disabled={savingVac || !vacStart || !vacEnd}>{savingVac ? 'Saving...' : vacSaved ? '✓ Saved!' : 'Save Dates'}</button>
+              {(vacStart || vacEnd) && <button onClick={clearVacation} style={{ background: 'none', border: '1px solid var(--gray-200)', borderRadius: 8, padding: '7px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--gray-600)' }}>Clear</button>}
             </div>
           </div>
 
-          {/* Auto-Reply */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{ width: 36, height: 36, background: '#f0fdf4', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>💬</div>
-              <div>
-                <h3 style={{ fontSize: 16, color: 'var(--gray-800)' }}>Auto-Reply Message</h3>
-                <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Sent when someone messages you while offline</p>
-              </div>
+              <div><h3 style={{ fontSize: 16, color: 'var(--gray-800)' }}>Auto-Reply Message</h3><p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Sent when someone messages you while offline</p></div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-700)' }}>Enable auto-reply</span>
@@ -507,37 +559,20 @@ export default function ProviderPage({ userId, profile, providerProfile, onPost,
                 ))}
               </div>
             </div>
-            <button className="btn-primary btn-sm" onClick={saveAutoReply} disabled={savingReply}>
-              {savingReply ? 'Saving...' : replySaved ? '✓ Saved!' : 'Save Auto-Reply'}
-            </button>
+            <button className="btn-primary btn-sm" onClick={saveAutoReply} disabled={savingReply}>{savingReply ? 'Saving...' : replySaved ? '✓ Saved!' : 'Save Auto-Reply'}</button>
           </div>
 
-          {/* Service Area */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{ width: 36, height: 36, background: '#eff6ff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📍</div>
-              <div>
-                <h3 style={{ fontSize: 16, color: 'var(--gray-800)' }}>Service Area</h3>
-                <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Your current coverage</p>
-              </div>
+              <div><h3 style={{ fontSize: 16, color: 'var(--gray-800)' }}>Service Area</h3><p style={{ fontSize: 13, color: 'var(--gray-500)' }}>Your current coverage</p></div>
             </div>
             {providerProfile?.zip ? (
               <div>
                 <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-                  <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10 }}>
-                    <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>Base Location</div>
-                    <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 16 }}>📍 {providerProfile.zip}</div>
-                  </div>
-                  <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10 }}>
-                    <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>Radius</div>
-                    <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 16 }}>{providerProfile.service_radius || 25} miles</div>
-                  </div>
-                  {providerProfile.lat && providerProfile.lng && (
-                    <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: 10 }}>
-                      <div style={{ fontSize: 12, color: '#15803d' }}>Map Status</div>
-                      <div style={{ fontWeight: 600, color: '#15803d', fontSize: 14 }}>✓ Visible on map</div>
-                    </div>
-                  )}
+                  <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10 }}><div style={{ fontSize: 12, color: 'var(--gray-500)' }}>Base Location</div><div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 16 }}>📍 {providerProfile.zip}</div></div>
+                  <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderRadius: 10 }}><div style={{ fontSize: 12, color: 'var(--gray-500)' }}>Radius</div><div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 16 }}>{providerProfile.service_radius || 25} miles</div></div>
+                  {providerProfile.lat && providerProfile.lng && <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: 10 }}><div style={{ fontSize: 12, color: '#15803d' }}>Map Status</div><div style={{ fontWeight: 600, color: '#15803d', fontSize: 14 }}>✓ Visible on map</div></div>}
                 </div>
                 <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>To update your service area, edit your profile and change the zip code or radius.</p>
                 <button className="btn-outline btn-sm" onClick={onPost} style={{ marginTop: 10 }}>Edit Service Area</button>

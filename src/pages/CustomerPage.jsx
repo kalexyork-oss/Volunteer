@@ -1,28 +1,103 @@
-import React, { useState, useEffect } from 'react';
-import { getMyBookings, updateBookingStatus, submitReview, getMyReviews } from '../lib/db';
+import React, { useState, useEffect, useRef } from 'react';
+import { getMyBookings, updateBookingStatus, submitReview, getMyReviews, subscribeToBooking } from '../lib/db';
 
+// ---- Status badge ----
 function StatusBadge({ status }) {
   const map = { Pending: 'badge-yellow', Accepted: 'badge-blue', Completed: 'badge-green', Cancelled: 'badge-red' };
   return <span className={`badge ${map[status] || 'badge-gray'}`}>{status}</span>;
 }
 
+// ---- Star picker ----
 function StarPicker({ value, onChange }) {
   const [hover, setHover] = useState(0);
   return (
     <div style={{ display: 'flex', gap: 4 }}>
       {[1,2,3,4,5].map(i => (
-        <span
-          key={i}
-          onClick={() => onChange(i)}
-          onMouseEnter={() => setHover(i)}
-          onMouseLeave={() => setHover(0)}
-          style={{ fontSize: 28, cursor: 'pointer', color: i <= (hover || value) ? '#f59e0b' : '#e2e8f0', transition: 'color .1s' }}
-        >★</span>
+        <span key={i} onClick={() => onChange(i)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(0)}
+          style={{ fontSize: 28, cursor: 'pointer', color: i <= (hover || value) ? '#f59e0b' : '#e2e8f0', transition: 'color .1s' }}>★</span>
       ))}
     </div>
   );
 }
 
+// ---- Live tracking progress bar ----
+const TRACKING_STEPS = [
+  { key: null,          label: 'Confirmed',   icon: '✅', desc: 'Your booking is confirmed' },
+  { key: 'on_the_way',  label: 'On The Way',  icon: '🚗', desc: 'Provider is heading to you' },
+  { key: 'arrived',     label: 'Arrived',     icon: '📍', desc: 'Provider has arrived' },
+  { key: 'in_progress', label: 'In Progress', icon: '🔧', desc: 'Work is in progress' },
+  { key: 'done',        label: 'Completed',   icon: '🏆', desc: 'Job complete!' },
+];
+
+function TrackingBar({ booking }) {
+  const trackingStatus = booking.tracking_status;
+  const isCompleted    = booking.status === 'Completed';
+
+  const currentIndex = isCompleted
+    ? 4
+    : TRACKING_STEPS.findIndex(s => s.key === trackingStatus);
+  const activeIndex = currentIndex === -1 ? 0 : currentIndex;
+
+  const currentStep = TRACKING_STEPS[activeIndex];
+
+  return (
+    <div style={{ marginTop: 14, background: 'linear-gradient(135deg, #f0f4ff, #f0fdf4)', border: '1px solid #c7d7fc', borderRadius: 14, padding: '16px 18px' }}>
+      {/* Current status headline */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--navy)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+          {currentStep.icon}
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, color: 'var(--navy)', fontSize: 14 }}>{currentStep.label}</div>
+          <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{currentStep.desc}</div>
+        </div>
+        {trackingStatus === 'on_the_way' && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', animation: 'pulse 1.5s infinite' }} />
+            <span style={{ fontSize: 12, color: '#15803d', fontWeight: 600 }}>Live</span>
+          </div>
+        )}
+      </div>
+
+      {/* Progress steps */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+        {TRACKING_STEPS.map((step, i) => {
+          const done    = i < activeIndex;
+          const active  = i === activeIndex;
+          const future  = i > activeIndex;
+          return (
+            <React.Fragment key={i}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: i < 4 ? 'none' : 1 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: done ? 'var(--green)' : active ? 'var(--navy)' : 'var(--gray-200)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: done ? 13 : 11,
+                  color: done || active ? 'white' : 'var(--gray-400)',
+                  fontWeight: 700,
+                  transition: 'all .4s',
+                  boxShadow: active ? '0 0 0 4px rgba(15,30,61,0.15)' : 'none',
+                }}>
+                  {done ? '✓' : step.icon}
+                </div>
+                <div style={{ fontSize: 9, color: active ? 'var(--navy)' : done ? 'var(--green)' : 'var(--gray-400)', fontWeight: active ? 700 : 400, marginTop: 4, whiteSpace: 'nowrap' }}>
+                  {step.label}
+                </div>
+              </div>
+              {i < TRACKING_STEPS.length - 1 && (
+                <div style={{ flex: 1, height: 3, background: i < activeIndex ? 'var(--green)' : 'var(--gray-200)', transition: 'background .4s', marginBottom: 16, borderRadius: 2 }} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }`}</style>
+    </div>
+  );
+}
+
+// ---- Review modal ----
 function ReviewModal({ booking, userId, onClose, onDone }) {
   const [rating, setRating] = useState(5);
   const [body,   setBody]   = useState('');
@@ -32,17 +107,10 @@ function ReviewModal({ booking, userId, onClose, onDone }) {
   const handleSubmit = async () => {
     if (!rating) { setError('Please select a star rating.'); return; }
     setSaving(true);
-    const { error: err } = await submitReview({
-      bookingId:  booking.id,
-      reviewerId: userId,
-      providerId: booking.provider_id,
-      rating,
-      body,
-    });
+    const { error: err } = await submitReview({ bookingId: booking.id, reviewerId: userId, providerId: booking.provider_id, rating, body });
     setSaving(false);
     if (err) { setError(err.message); return; }
-    onDone();
-    onClose();
+    onDone(); onClose();
   };
 
   return (
@@ -52,41 +120,23 @@ function ReviewModal({ booking, userId, onClose, onDone }) {
           <h2 style={{ fontSize: 20, color: 'var(--navy)' }}>Leave a Review</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8' }}>✕</button>
         </div>
-
         <div style={{ background: 'var(--gray-50)', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
           <div style={{ fontWeight: 600, color: 'var(--navy)' }}>{booking.service}</div>
-          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 2 }}>
-            Provider: {booking.providers?.profiles?.name || 'Unknown'}
-          </div>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 2 }}>Provider: {booking.providers?.profiles?.name || 'Unknown'}</div>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <label>Your Rating *</label>
             <div style={{ marginTop: 8 }}>
               <StarPicker value={rating} onChange={setRating} />
-              <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 6 }}>
-                {['','Terrible','Poor','Okay','Good','Excellent!'][rating]}
-              </div>
+              <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 6 }}>{['','Terrible','Poor','Okay','Good','Excellent!'][rating]}</div>
             </div>
           </div>
-
           <div>
             <label>Your Review (optional)</label>
-            <textarea
-              rows={4} style={{ resize: 'none' }}
-              placeholder="How was the experience? Would you recommend this provider?"
-              value={body}
-              onChange={e => setBody(e.target.value)}
-            />
+            <textarea rows={4} style={{ resize: 'none' }} placeholder="How was the experience? Would you recommend this provider?" value={body} onChange={e => setBody(e.target.value)} />
           </div>
-
-          {error && (
-            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991b1b' }}>
-              {error}
-            </div>
-          )}
-
+          {error && <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#991b1b' }}>{error}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-outline" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
             <button className="btn-primary" style={{ flex: 2, justifyContent: 'center' }} onClick={handleSubmit} disabled={saving}>
@@ -99,13 +149,15 @@ function ReviewModal({ booking, userId, onClose, onDone }) {
   );
 }
 
+// ---- Main CustomerPage ----
 export default function CustomerPage({ userId, onBook, onOpenChat }) {
-  const [bookings,       setBookings]       = useState([]);
-  const [reviewedIds,    setReviewedIds]    = useState(new Set()); // booking IDs already reviewed
-  const [loading,        setLoading]        = useState(true);
-  const [reviewBooking,  setReviewBooking]  = useState(null);
-  const [filter,         setFilter]         = useState('all');
-  const [cancelling,     setCancelling]     = useState(null);
+  const [bookings,      setBookings]      = useState([]);
+  const [reviewedIds,   setReviewedIds]   = useState(new Set());
+  const [loading,       setLoading]       = useState(true);
+  const [reviewBooking, setReviewBooking] = useState(null);
+  const [filter,        setFilter]        = useState('all');
+  const [cancelling,    setCancelling]    = useState(null);
+  const subscriptions = useRef({});
 
   const load = async () => {
     if (!userId) return;
@@ -114,12 +166,25 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
       getMyReviews(userId),
     ]);
     setBookings(b || []);
-    // Build a set of booking IDs the user has already reviewed
     setReviewedIds(new Set((r || []).map(rev => rev.booking_id)));
     setLoading(false);
+    // Subscribe to live tracking for all active bookings
+    (b || []).forEach(booking => {
+      if (booking.status === 'Accepted' && !subscriptions.current[booking.id]) {
+        subscriptions.current[booking.id] = subscribeToBooking(booking.id, updated => {
+          setBookings(prev => prev.map(bk => bk.id === updated.id ? { ...bk, ...updated } : bk));
+        });
+      }
+    });
   };
 
-  useEffect(() => { load(); }, [userId]);
+  useEffect(() => {
+    load();
+    return () => {
+      // Unsubscribe all on unmount
+      Object.values(subscriptions.current).forEach(sub => sub?.unsubscribe?.());
+    };
+  }, [userId]);
 
   const handleCancel = async (bookingId) => {
     if (!window.confirm('Are you sure you want to cancel this booking?')) return;
@@ -127,10 +192,6 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
     await updateBookingStatus(bookingId, 'Cancelled');
     setCancelling(null);
     load();
-  };
-
-  const handleReviewDone = () => {
-    load(); // reload so the button disappears
   };
 
   const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status.toLowerCase() === filter);
@@ -162,11 +223,7 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
             color: filter === k ? 'white' : 'var(--gray-600)',
           }}>
             {l}
-            {k !== 'all' && (
-              <span style={{ marginLeft: 6, opacity: .7 }}>
-                ({bookings.filter(b => b.status.toLowerCase() === k).length})
-              </span>
-            )}
+            {k !== 'all' && <span style={{ marginLeft: 6, opacity: .7 }}>({bookings.filter(b => b.status.toLowerCase() === k).length})</span>}
           </button>
         ))}
       </div>
@@ -201,21 +258,25 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
                 </div>
               )}
 
+              {/* Status messages */}
               {!b.provider_id && b.status === 'Pending' && (
                 <div style={{ marginTop: 8, fontSize: 13, color: '#92400e', background: '#fef9c3', padding: '6px 10px', borderRadius: 8, display: 'inline-block' }}>
                   ⏳ Waiting for a provider to accept...
                 </div>
               )}
-
               {b.provider_id && b.status === 'Pending' && (
                 <div style={{ marginTop: 8, fontSize: 13, color: '#1d4ed8', background: '#eff6ff', padding: '6px 10px', borderRadius: 8, display: 'inline-block' }}>
                   🔔 Request sent — waiting for provider to confirm
                 </div>
               )}
 
+              {/* LIVE TRACKING BAR — shows for accepted bookings */}
+              {b.status === 'Accepted' && b.provider_id && (
+                <TrackingBar booking={b} />
+              )}
+
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                {/* Chat */}
                 {b.provider_id && b.status !== 'Cancelled' && onOpenChat && (
                   <button
                     onClick={() => onOpenChat({ booking: b, otherName: b.providers?.profiles?.name || 'Provider' })}
@@ -224,8 +285,6 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
                     💬 Chat
                   </button>
                 )}
-
-                {/* Cancel */}
                 {(b.status === 'Pending' || b.status === 'Accepted') && (
                   <button
                     onClick={() => handleCancel(b.id)}
@@ -235,8 +294,6 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
                     {cancelling === b.id ? 'Cancelling...' : 'Cancel Booking'}
                   </button>
                 )}
-
-                {/* Leave review — only Completed, has provider, NOT already reviewed */}
                 {b.status === 'Completed' && b.provider_id && !reviewedIds.has(b.id) && (
                   <button
                     onClick={() => setReviewBooking(b)}
@@ -245,8 +302,6 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
                     ⭐ Leave a Review
                   </button>
                 )}
-
-                {/* Already reviewed badge */}
                 {b.status === 'Completed' && b.provider_id && reviewedIds.has(b.id) && (
                   <span style={{ fontSize: 13, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 14px', fontWeight: 500 }}>
                     ✓ Review submitted
@@ -266,12 +321,7 @@ export default function CustomerPage({ userId, onBook, onOpenChat }) {
       ))}
 
       {reviewBooking && (
-        <ReviewModal
-          booking={reviewBooking}
-          userId={userId}
-          onClose={() => setReviewBooking(null)}
-          onDone={handleReviewDone}
-        />
+        <ReviewModal booking={reviewBooking} userId={userId} onClose={() => setReviewBooking(null)} onDone={load} />
       )}
     </div>
   );

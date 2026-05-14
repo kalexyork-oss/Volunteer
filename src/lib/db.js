@@ -97,7 +97,6 @@ export async function getProviderReviews(providerId) {
   return { data, error };
 }
 
-// Returns all reviews the user has submitted — used to hide "Leave a Review" button
 export async function getMyReviews(userId) {
   const { data, error } = await supabase
     .from('reviews')
@@ -107,7 +106,6 @@ export async function getMyReviews(userId) {
 }
 
 export async function submitReview({ bookingId, reviewerId, providerId, rating, body }) {
-  // Check for duplicate first
   const { data: existing } = await supabase
     .from('reviews')
     .select('id')
@@ -126,7 +124,6 @@ export async function submitReview({ bookingId, reviewerId, providerId, rating, 
     .single();
 
   if (!error) {
-    // Recalculate provider rating average
     const { data: reviews } = await supabase
       .from('reviews')
       .select('rating')
@@ -151,7 +148,8 @@ export async function createBooking({ customerId, providerId, service, date, tim
       provider_id: providerId || null,
       service, date, time, zip, notes,
       price: price || null,
-      status: 'Pending', // Always Pending — provider must manually accept
+      status: 'Pending',
+      tracking_status: null,
     })
     .select()
     .single();
@@ -188,7 +186,7 @@ export async function getProviderBookings(providerId) {
 export async function acceptBooking(bookingId, providerId) {
   const { data, error } = await supabase
     .from('bookings')
-    .update({ provider_id: providerId, status: 'Accepted' })
+    .update({ provider_id: providerId, status: 'Accepted', tracking_status: null })
     .eq('id', bookingId)
     .select()
     .single();
@@ -203,6 +201,30 @@ export async function updateBookingStatus(bookingId, status) {
     .select()
     .single();
   return { data, error };
+}
+
+// ---- TRACKING ----
+// tracking_status values: null | 'on_the_way' | 'arrived' | 'in_progress'
+export async function updateTrackingStatus(bookingId, trackingStatus) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ tracking_status: trackingStatus })
+    .eq('id', bookingId)
+    .select()
+    .single();
+  return { data, error };
+}
+
+// Real-time subscription — customer page listens for provider status changes
+export function subscribeToBooking(bookingId, callback) {
+  return supabase
+    .channel(`booking-tracking:${bookingId}`)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${bookingId}` },
+      payload => callback(payload.new)
+    )
+    .subscribe();
 }
 
 // ---- ADMIN ----
